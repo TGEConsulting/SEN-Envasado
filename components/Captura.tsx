@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { A, G, R, N, type Sem } from "@/lib/domain";
+import { A, type Sem } from "@/lib/domain";
+import MultivacHoras from "./MultivacHoras";
+import { HOURLY_PRODUCTS, computeHourly, emptyProducts, type HRow } from "@/lib/multivac";
 import { CAPTURE_MACHINES, DEFAULT_TIMES, TARGET_WEIGHT_G, compute, emptyRows, hasDowntime, type Row } from "@/lib/capture";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -16,6 +18,8 @@ export default function Captura({ role }: { role: string }) {
   const [leader, setLeader] = useState("");
   const [supervisor, setSupervisor] = useState("");
   const [rows, setRows] = useState<Row[]>(emptyRows());
+  const [products, setProducts] = useState(emptyProducts());
+  const [product, setProduct] = useState(HOURLY_PRODUCTS[0][0]);
   const [signed, setSigned] = useState(false);
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,12 +30,11 @@ export default function Captura({ role }: { role: string }) {
   const showPar = hasDowntime(machine);
 
   const load = useCallback(async () => {
-    if (isMulti) return;
     setMsg(null);
-    const res = await fetch(`/api/capture?day=${day}&machine=${encodeURIComponent(machine)}`);
+    const res = await fetch(isMulti ? `/api/capture-hourly?day=${day}` : `/api/capture?day=${day}&machine=${encodeURIComponent(machine)}`);
     if (!res.ok) return setMsg({ t: "No se pudo cargar la hoja.", bad: true });
     const j = await res.json();
-    setRows(j.rows); setTeam(j.team); setLeader(j.leader); setSupervisor(j.supervisor); setSigned(j.signed);
+    if (isMulti) setProducts(j.products); else setRows(j.rows); setTeam(j.team); setLeader(j.leader); setSupervisor(j.supervisor); setSigned(j.signed);
   }, [day, machine, isMulti]);
   useEffect(() => { load(); }, [load]);
 
@@ -39,12 +42,13 @@ export default function Captura({ role }: { role: string }) {
     setRows((rs) => rs.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
 
   async function save(sign: boolean) {
-    if (sign && r.hasErrors) return setMsg({ t: "Corrige los batches en rojo antes de firmar y enviar.", bad: true });
+    const bad = isMulti ? HOURLY_PRODUCTS.some(([id]) => computeHourly(products[id]).hasErrors) : r.hasErrors;
+    if (sign && bad) return setMsg({ t: "Corrige los batches en rojo antes de firmar y enviar.", bad: true });
     if (sign && (!leader.trim() || !supervisor.trim())) return setMsg({ t: "Escribe el nombre del líder y del supervisor para firmar.", bad: true });
     setBusy(true); setMsg(null);
     try {
-      const res = await fetch("/api/capture", { method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day, machine, team, leader, supervisor, rows, sign }) });
+      const res = await fetch(isMulti ? "/api/capture-hourly" : "/api/capture", { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isMulti ? { day, team, leader, supervisor, products, sign } : { day, machine, team, leader, supervisor, rows, sign }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) return setMsg({ t: j.error ?? "No se pudo guardar.", bad: true });
       setSigned(j.signed);
@@ -63,7 +67,7 @@ export default function Captura({ role }: { role: string }) {
           <div className="kicker">{role === "Operador" ? "Captura" : "Empaque"}{signed ? " · hoja firmada" : ""}</div>
           <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05 }}>Registro Envasado</h1>
         </div>
-        {!isMulti && (
+        {(
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-secondary" disabled={busy || locked} onClick={() => save(false)}>Guardar borrador</button>
             <button className="btn btn-primary" disabled={busy || locked} onClick={() => save(true)} style={{ whiteSpace: "nowrap" }}>Firmar y enviar</button>
@@ -90,11 +94,9 @@ export default function Captura({ role }: { role: string }) {
       </div>
 
       {isMulti ? (
-        <div className="blueprint" style={{ padding: 28 }}>
-          <div className="kicker">Pendiente</div>
-          <h2 style={{ fontSize: 28 }}>Multivac se captura por hora</h2>
-          <p className="muted" style={{ margin: 0 }}>La captura por hora y por producto de Multivac aún no está implementada. Las demás máquinas capturan por batch.</p>
-        </div>
+        <MultivacHoras product={product} onProduct={setProduct} rows={products[product]} locked={locked}
+          onChange={(i: number, k: keyof HRow, v: string) =>
+            setProducts((p) => ({ ...p, [product]: p[product].map((x, j) => (j === i ? { ...x, [k]: v } : x)) }))} />
       ) : (<>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,160px),1fr))", gap: 16 }}>
           {r.kpis.map((k) => (
@@ -157,6 +159,8 @@ export default function Captura({ role }: { role: string }) {
           ))}
         </div>
 
+      </>)}
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,260px),1fr))", gap: 16 }}>
           {[["Responsable operativo", leader], ["Supervisor", supervisor]].map(([t, v]) => (
             <div key={t} className="blueprint" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -166,7 +170,6 @@ export default function Captura({ role }: { role: string }) {
             </div>
           ))}
         </div>
-      </>)}
     </>
   );
 }

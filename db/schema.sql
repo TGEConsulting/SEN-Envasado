@@ -108,3 +108,10 @@ insert into users (email, role, status) values ('etorres@lacteoslaquinta.com.mx'
 -- Captura por máquina: merma por batch y estado de la hoja (borrador / firmada).
 alter table batch_records add column if not exists merma_kg numeric(10,2);
 alter table shift_sheets add column if not exists updated_at timestamptz not null default now();
+
+-- Artículos de Multivac (captura por hora y producto).
+insert into articles (id, description, process) values
+  (2135, 'QUESO OAXACA 3B VACA BLANCA 400G', 'Multivac'),
+  (1065, 'QUESO PANELA Q VACA BLANCA 300G TERMO', 'Multivac'),
+  (1073, 'QUESO FRESCO RANCHERO VACA BLANCA DE 220 GRAMOS TERMO FORMADO SEMIRRIGIDO', 'Multivac')
+on conflict (id) do nothing;
