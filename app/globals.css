@@ -1,0 +1,72 @@
+/* SEN · Sistema de Envasado — tokens del diseño (sistema "Industry" + paleta La Quinta) */
+:root {
+  --font-heading: "Outfit", system-ui, sans-serif;
+  --font-body: "Outfit", system-ui, sans-serif;
+  --font-heading-weight: 700;
+  --color-bg: #ffffff;
+  --color-surface: #eaf1f8;
+  --color-text: #161a2d;
+  --color-accent: #0d4884;
+  --color-accent-100: #e6f0fa;
+  --color-accent-200: #cfe2f5;
+  --color-accent-300: #9fc6e8;
+  --color-accent-400: #769dbf;
+  --color-accent-500: #149bd8;
+  --color-accent-600: #0b3d70;
+  --color-accent-700: #0d4884;
+  --color-accent-800: #0a3d5c;
+  --color-accent-900: #161a2d;
+  --color-neutral-200: #e3eaf2;
+  --color-neutral-300: #cdd7e3;
+  --color-neutral-500: #8a97a8;
+  --color-neutral-700: #4f5b6d;
+  --color-neutral-800: #323c4d;
+  --color-divider: #c4d3e3;
+  --sem-green: #5aa31a;
+  --sem-amber: #f2a900;
+  --sem-red: #db0030;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--color-surface); color: var(--color-text); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: var(--font-heading-weight); line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 6px; }
+a { color: var(--color-accent-700); }
+img { display: block; max-width: 100%; }
+table { font-variant-numeric: tabular-nums; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.blueprint { position: relative; border: 2px solid #0d4884; border-radius: 16px; background: #fff; box-shadow: 0 2px 0 rgba(13,72,132,.08); }
+.stripe { height: 8px; background: linear-gradient(90deg,#0d4884 0 60%,#149bd8 60% 80%,#db0030 80% 90%,#78be20 90%); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; text-decoration: none; font-family: var(--font-body); font-weight: 600; font-size: 15px; min-height: 44px; border-radius: 12px; padding: 8px 18px; border: 1px solid transparent; background: transparent; color: var(--color-text); }
+.btn-primary { background: #0d4884; color: #fff; }
+.btn-primary:hover { background: #149bd8; }
+.btn-primary:active { background: #0b3d70; }
+.btn-secondary { border: 2px solid #0d4884; color: #0d4884; background: #fff; }
+.btn-secondary:hover { background: #e6f0fa; }
+.btn-sm { min-height: 36px; padding: 4px 12px; font-size: 14px; }
+
+.input { width: 100%; min-height: 44px; padding: 6px 10px; font: inherit; font-size: 16px; color: var(--color-text); background: #fff; border: 1.5px solid #9fc6e8; border-radius: 10px; }
+.input:hover { border-color: #0d4884; }
+.input:focus-visible { border-color: #149bd8; box-shadow: 0 0 0 3px #cfe2f5; outline: none; }
+
+.seg { display: inline-flex; overflow: hidden; border: 2px solid #0d4884; border-radius: 12px; }
+.seg-opt { position: relative; display: inline-flex; align-items: center; padding: 10px 16px; font-size: 15px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.seg-opt + .seg-opt { border-left: 2px solid #0d4884; }
+.seg-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-opt:has(input:checked) { background: #0d4884; color: #fff; }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+.tag { display: inline-flex; align-items: center; font-size: 12px; padding: 3px 12px; border-radius: 999px; background: #e6f0fa; color: #0d4884; font-weight: 600; white-space: nowrap; }
+
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: #0d4884; background: #e6f0fa; padding: 10px 12px; }
+.table td { padding: 10px 12px; border-bottom: 1px solid #e3eaf2; }
+
+.kicker { font-size: 12px; line-height: 1.4; margin-bottom: 6px; letter-spacing: .1em; text-transform: uppercase; color: var(--color-accent-700); }
+.card-title { font-family: var(--font-heading); font-weight: 700; font-size: 21px; color: #0d4884; }
+.muted { color: var(--color-neutral-700); }
+
+.grid-auto { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
