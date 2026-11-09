@@ -1,24 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import {
   DAYS, DAY_LABEL, MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL,
   type Day, type Role, type TabId,
 } from "@/lib/domain";
 import Tablero from "./Tablero";
+import Users from "./Users";
 
-const ROLE_OPTIONS: [Role, string][] = [
-  ["Dirección", "Dirección"], ["Gerencia", "Gerencia de producción"], ["Planeador", "Planeador"],
-  ["Administrador", "Administrador"], ["Supervisor", "Supervisor / líder de grupo"], ["Operador", "Operador capturista"],
-];
 const ORDER = ["tablero", "focos", "tend", "env", "ent", "cap", "datos", "rep", "bit", "config", "users"] as const;
 const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, ent: 2, cap: 3, datos: 3, rep: 3, bit: 3, config: 3, users: 3 };
 
-export default function Shell() {
-  const [role, setRole] = useState<Role>("Gerencia");
+export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const [tabState, setTab] = useState<TabId>("tablero");
   const [day, setDay] = useState<Day>(16);
+
+  const signOut = async () => { await fetch("/api/auth/signout", { method: "POST" }); window.location.href = "/"; };
 
   const allowed = ROLES[role];
   const tab = allowed.includes(tabState) ? tabState : allowed[0];
@@ -32,16 +29,6 @@ export default function Shell() {
 
   return (
     <div style={{ minHeight: "100vh", padding: "16px 16px 48px" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, fontSize: 13 }} className="muted">
-        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--color-text)" }}>Prototipo</span>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          Rol
-          <select className="input" style={{ width: "auto", minWidth: 210 }} value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {ROLE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-      </div>
-
       <div className="blueprint" style={{ maxWidth: 1280, margin: "0 auto", overflow: "hidden", borderRadius: 18 }}>
         <div className="stripe" style={{ margin: "-2px -2px 0" }} />
 
@@ -53,7 +40,7 @@ export default function Shell() {
               <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Sistema de Envasado</span>
             </span>
             <span className="tag">{ROLE_LABEL[role]}</span>
-            <Link className="btn btn-secondary btn-sm" href="/">Salir</Link>
+            <button className="btn btn-secondary btn-sm" onClick={signOut}>Salir</button>
           </div>
           {showDays && (
             <div style={{ display: "flex", overflowX: "auto", maxWidth: "100%", gap: 6 }}>
@@ -101,6 +88,8 @@ export default function Shell() {
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
             <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
+          ) : tab === "users" ? (
+            <Users meId={meId} />
           ) : (
             <div className="blueprint" style={{ padding: 28 }}>
               <div className="kicker">Pendiente</div>

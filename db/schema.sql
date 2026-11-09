@@ -93,3 +93,14 @@ create table if not exists audit_log (
   new_value  text,
   reason     text not null
 );
+
+-- Códigos de activación de invitaciones (6 dígitos, 15 min, máx. 5 intentos).
+create table if not exists activation_codes (
+  email      text primary key,
+  code_hash  text not null,
+  expires_at timestamptz not null,
+  attempts   integer not null default 0
+);
+
+-- Primer administrador (se activa con el flujo de invitación).
+insert into users (email, role, status) values ('etorres@lacteoslaquinta.com.mx','Administrador','invitado') on conflict (email) do nothing;
