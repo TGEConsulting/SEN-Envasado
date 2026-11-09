@@ -31,7 +31,7 @@ export const TAB_LABEL: Record<TabId, string> = {
 
 export const MACHINE_TABS: TabId[] = ["ter", "mol", "mk", "embo", "vac"];
 
-// Semáforo: verde ≥ 95 %, amarillo 85–95 %, rojo < 85 %.
+// Semáforo (definido por el cliente): verde ≥ 98 %, amarillo 95–98 %, rojo < 95 %.
 export type Sem = { c: string; t: string; i: string; l: string };
 export const G: Sem = { c: "#5aa31a", t: "#e8f5d6", i: "#2f5f0b", l: "Verde" };
 export const A: Sem = { c: "#f2a900", t: "#fff2cc", i: "#7a5200", l: "Amarillo" };
@@ -39,7 +39,7 @@ export const R: Sem = { c: "#db0030", t: "#fde3e8", i: "#9a0022", l: "Rojo" };
 export const N: Sem = { c: "#8a97a8", t: "#e3eaf2", i: "#323c4d", l: "Sin dato" };
 
 export const sem = (v: number | null | undefined): Sem =>
-  v == null ? N : v >= 0.95 ? G : v >= 0.85 ? A : R;
+  v == null ? N : v >= 0.98 ? G : v >= 0.95 ? A : R;
 export const pct = (v: number | null | undefined) => (v == null ? "—" : (v * 100).toFixed(1) + "%");
 export const n0 = (n: number) => Math.round(n).toLocaleString("en-US");
 
@@ -67,3 +67,12 @@ export const MONTH_TO_DATE = [
   { a: "Multivac", b: "96.4%" },
   { a: "Piezas entregadas", b: "287,313 de 287,028" },
 ];
+
+// Proceso por defecto de un artículo nuevo (regla del prototipo); el planeador lo ajusta en Datos.
+export type Process = "Tecnovac" | "Multivac" | "Termo MK" | "Embolsado" | "Polar";
+export const PROCESSES: Process[] = ["Tecnovac", "Multivac", "Termo MK", "Embolsado", "Polar"];
+export const defaultProcess = (id: number): Process =>
+  id === 10100 ? "Tecnovac"
+  : [2135, 1065, 1073].includes(id) ? "Multivac"
+  : id === 6000 || (id >= 2001 && id <= 2190 && id !== 2135) ? "Polar"
+  : "Embolsado";

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pct, sem } from "@/lib/domain";
 
 const FEATURES = [
   ["Captura por máquina", "Tecnovac, Multivac, Termo MK, Embolsado y Polar, con cálculo automático y validaciones."],
@@ -6,11 +7,9 @@ const FEATURES = [
   ["Tablero con semáforo", "Cumplimiento, rendimiento, desecho y retraso por batch, por proceso."],
   ["Bitácora de cambios", "Cada cambio a programas y horarios queda con usuario, fecha y motivo."],
 ];
-const SAMPLE = [
-  ["Multivac", "103.3%", "Verde", "#5aa31a"],
-  ["Tecnovac", "97.2%", "Verde", "#5aa31a"],
-  ["Entregas PT", "89.1%", "Amarillo", "#f2a900"],
-];
+const SAMPLE = ([["Multivac", 1.033], ["Tecnovac", 0.972], ["Entregas PT", 0.891]] as const).map(
+  ([n, v]) => [n, pct(v), sem(v).l, sem(v).c] as const,
+);
 
 export default function Landing() {
   return (

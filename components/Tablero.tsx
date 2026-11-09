@@ -93,7 +93,7 @@ export default function Tablero({ day, canOpen, onOpen }: { day: Day; canOpen: (
 
       <div className="muted" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 12, alignItems: "center" }}>
         <span>Semáforo</span>
-        {[[G, "verde ≥ 95%"], [A, "amarillo 85–95%"], [R, "rojo < 85%"]].map(([s, t]) => (
+        {[[G, "verde ≥ 98%"], [A, "amarillo 95–98%"], [R, "rojo < 95%"]].map(([s, t]) => (
           <span key={t as string} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
             <span className="dot" style={{ width: 10, height: 10, background: (s as typeof G).c }} />{t as string}
           </span>
