@@ -1,0 +1,93 @@
+// Captura por batch: constantes y cálculos (puros, compartidos por cliente y servidor).
+import { A, G, N, R, n0, pct, type Sem } from "./domain";
+
+export const BATCH_MACHINES = ["Tecnovac", "Embolsado", "Termo MK", "Polar"] as const;
+export const CAPTURE_MACHINES = ["Multivac", ...BATCH_MACHINES] as const;
+export type BatchMachine = (typeof BATCH_MACHINES)[number];
+
+export const N_BATCHES = 13;
+export const TOLERANCE_MIN = 10; // verde dentro de la tolerancia, amarillo hasta 20, rojo después
+export const TARGET_WEIGHT_G: Record<string, number> = { Tecnovac: 250 };
+// Horas esperadas por defecto (Configuración): 09:05 y luego cada 65 min.
+export const DEFAULT_TIMES = Array.from({ length: N_BATCHES }, (_, i) => hhmm(9 * 60 + 5 + i * 65));
+export const hasDowntime = (m: string) => m !== "Embolsado";
+
+export type Row = { real: string; paro: string; kg: string; peso: string; pzs: string; mer: string };
+export const emptyRow = (): Row => ({ real: "", paro: "", kg: "", peso: "", pzs: "", mer: "" });
+export const emptyRows = () => Array.from({ length: N_BATCHES }, emptyRow);
+
+export function hhmm(m: number) {
+  return String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(Math.round(m % 60)).padStart(2, "0");
+}
+const mins = (t: string) => { const [h, m] = t.split(":"); return h !== "" && h != null && m != null && isFinite(+h) && isFinite(+m) ? +h * 60 + +m : NaN; };
+const num = (x: string) => { const v = parseFloat(x); return isFinite(v) ? v : NaN; };
+const fx = (v: number, d: number) => (isFinite(v) ? v.toFixed(d) : "—");
+const sg = (n: number) => (n > 0 ? "+" : "") + n0(n);
+
+export const delaySem = (min: number): Sem => (min <= TOLERANCE_MIN ? G : min <= 20 ? A : R);
+
+export type Calc = {
+  n: number; exp: string; retTxt: string; retSem: Sem | null; tot: string; tm: string;
+  rend: string; rendWarn: boolean; des: string; pdes: string; ok: boolean;
+};
+export type Kpi = { label: string; val: string; sub: string; bar: string };
+export type Warn = { s: Sem; h: string; m: string };
+
+export function compute(machine: string, rows: Row[], times: string[] = DEFAULT_TIMES) {
+  const tg = (TARGET_WEIGHT_G[machine] ?? 0) / 1000;
+  const items = rows.map((r, i) => {
+    const exp = mins(times[i] ?? ""), rm = mins(r.real);
+    const kg = num(r.kg), peso = num(r.peso), pzs = num(r.pzs), mer = num(r.mer) || 0, paro = num(r.paro) || 0;
+    const ok = [kg, peso, pzs].every((v) => isFinite(v) && v > 0);
+    const prod = ok ? peso * pzs : NaN, tm = prod + mer;
+    return { i, exp, rm, kg, peso, pzs, mer, paro, ok, prod, tm, rend: tm / kg, des: ok ? Math.max(0, kg - tm) : NaN,
+      ret: rm - exp, has: ok || isFinite(rm) || [r.kg, r.peso, r.pzs].some((v) => v !== "") };
+  }).filter((c) => isFinite(c.exp));
+
+  const calc: Calc[] = items.map((c) => ({
+    n: c.i + 1, exp: hhmm(c.exp), ok: c.ok,
+    retTxt: isFinite(c.ret) ? (c.ret > 0 ? "+" : "") + Math.round(c.ret) + " min" : "—",
+    retSem: isFinite(c.ret) ? delaySem(c.ret) : null,
+    tot: fx(c.prod, 2), tm: fx(c.tm, 2),
+    rend: c.ok ? pct(c.rend) : "—", rendWarn: c.ok && (c.rend > 1.1 || c.rend < 0.9),
+    des: fx(c.des, 2), pdes: c.ok ? pct(c.des / c.kg) : "—",
+  }));
+
+  const done = items.filter((c) => c.ok);
+  const sum = (f: (c: (typeof items)[number]) => number) => done.reduce((a, c) => a + (f(c) || 0), 0);
+  const sKg = sum((c) => c.kg), sPz = sum((c) => c.pzs), sProd = sum((c) => c.prod), sMer = sum((c) => c.mer);
+  const sTm = sum((c) => c.tm), sDes = sum((c) => c.des), sPar = items.reduce((a, c) => a + c.paro, 0);
+  const acc = {
+    paro: sPar + " min", pzs: n0(sPz), tot: sProd.toFixed(2), mer: sMer.toFixed(2), tm: sTm.toFixed(2),
+    rend: sKg ? pct(sTm / sKg) : "—", des: sDes.toFixed(2), pdes: sKg ? pct(sDes / sKg) : "—",
+  };
+
+  const wr = items.filter((c) => isFinite(c.ret)), onT = wr.filter((c) => c.ret <= TOLERANCE_MIN).length;
+  const avgPeso = done.length ? done.reduce((a, c) => a + c.peso, 0) / done.length : NaN;
+  const acc2 = "var(--color-accent)";
+  const kpis: Kpi[] = [
+    ...(hasDowntime(machine) ? [{ label: "Paro por MTO.", val: sPar + " min", sub: sPar ? "Acumulado de la jornada" : "Sin paros registrados", bar: sPar > 60 ? A.c : acc2 }] : []),
+    { label: "Batches a tiempo", val: wr.length ? pct(onT / wr.length) : "—", sub: wr.length ? `${onT} de ${wr.length}` : "Sin captura", bar: acc2 },
+    { label: "Rendimiento", val: sKg ? pct(sTm / sKg) : "—", sub: sKg ? n0(sKg) + " kg fundidos" : "Sin captura", bar: acc2 },
+    { label: "Desecho", val: sKg ? pct(sDes / sKg) : "—", sub: sKg ? sDes.toFixed(1) + " kg" : "Sin captura", bar: acc2 },
+    { label: "Sobrepeso vs " + (tg ? Math.round(tg * 1000) + " g" : "meta"),
+      val: isFinite(avgPeso) && tg ? "+" + ((avgPeso / tg - 1) * 100).toFixed(1) + "%" : "—",
+      sub: tg ? (isFinite(avgPeso) ? (avgPeso * 1000).toFixed(0) + " g por pieza" : "Sin captura") : "Sin peso objetivo", bar: acc2 },
+  ];
+
+  const w: Warn[] = [];
+  items.forEach((c) => {
+    const b = `Batch ${c.i + 1}:`;
+    if (c.has && !c.ok) w.push({ s: R, h: b, m: "faltan kg fundidos, peso o piezas." });
+    if (c.ok && !isFinite(c.rm)) w.push({ s: A, h: b, m: "sin hora real de término." });
+    if (isFinite(c.ret) && c.ret > 60) w.push({ s: A, h: b, m: `la hora real es ${Math.round(c.ret)} min posterior a la esperada (${hhmm(c.exp)}). Verifica la hora.` });
+    if (c.ok && (c.rend > 1.1 || c.rend < 0.9)) w.push({ s: A, h: b, m: `rendimiento ${pct(c.rend)} fuera de 90–110%.` });
+    if (c.ok && machine === "Tecnovac" && (c.peso < 0.245 || c.peso > 0.27)) w.push({ s: A, h: b, m: `peso por pieza atípico (${c.peso} kg).` });
+  });
+  const warns: Warn[] = w.length
+    ? w.slice(0, 5).concat(w.length > 5 ? [{ s: N, h: `Y ${w.length - 5} observaciones más.`, m: "" }] : [])
+    : [{ s: G, h: "Sin observaciones.", m: "Los valores están dentro de los rangos esperados." }];
+
+  return { calc, acc, kpis, warns, hasErrors: w.some((x) => x.s === R) };
+}
+export { sg };

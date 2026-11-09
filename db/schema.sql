@@ -104,3 +104,7 @@ create table if not exists activation_codes (
 
 -- Primer administrador (se activa con el flujo de invitación).
 insert into users (email, role, status) values ('etorres@lacteoslaquinta.com.mx','Administrador','invitado') on conflict (email) do nothing;
+
+-- Captura por máquina: merma por batch y estado de la hoja (borrador / firmada).
+alter table batch_records add column if not exists merma_kg numeric(10,2);
+alter table shift_sheets add column if not exists updated_at timestamptz not null default now();

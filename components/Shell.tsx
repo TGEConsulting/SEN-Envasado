@@ -7,6 +7,7 @@ import {
 } from "@/lib/domain";
 import Tablero from "./Tablero";
 import Users from "./Users";
+import Captura from "./Captura";
 
 const ORDER = ["tablero", "focos", "tend", "env", "ent", "cap", "datos", "rep", "bit", "config", "users"] as const;
 const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, ent: 2, cap: 3, datos: 3, rep: 3, bit: 3, config: 3, users: 3 };
@@ -88,6 +89,8 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
             <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
+          ) : tab === "cap" ? (
+            <Captura role={role} />
           ) : tab === "users" ? (
             <Users meId={meId} />
           ) : (
