@@ -47,6 +47,7 @@ export const n0 = (n: number) => Math.round(n).toLocaleString("en-US");
 const D = (iso: string) => new Date(iso + "T12:00:00Z");
 export const dayChip = (iso: string) => D(iso).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", timeZone: "UTC" }).replace(".", "");
 export const dayLong = (iso: string) => D(iso).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" }).replace(/\./g, "");
+export const monthLabel = (iso: string) => D(iso).toLocaleDateString("es-MX", { month: "long", year: "numeric", timeZone: "UTC" });
 export const monthStartLabel = (iso: string) => "1–" + D(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", timeZone: "UTC" }).replace(/\./g, "");
 
 // Proceso por defecto de un artículo nuevo (regla del prototipo); el planeador lo ajusta en Datos.

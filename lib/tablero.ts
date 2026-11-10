@@ -15,6 +15,11 @@ export type DayRaw = { progs: R[]; batch: R[]; hourly: R[]; deliv: R[] };
 
 export const BATCH_TAB: Record<string, "Tecnovac" | "Termo MK" | "Embolsado" | "Polar"> = { mol: "Tecnovac", mk: "Termo MK", embo: "Embolsado", vac: "Polar" };
 const MAQ = [{ name: "Termo MK", tab: "mk" }, { name: "Embolsado", tab: "embo" }, { name: "Polar", tab: "vac" }] as const;
+// Todos los días del mes desde el 1 hasta `day` (inclusive).
+export const monthDays = (day: string): string[] => {
+  const [y, m, d] = day.split("-").map(Number);
+  return Array.from({ length: d }, (_, i) => `${y}-${String(m).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`);
+};
 export const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
 export async function recentDays(db: Db): Promise<string[]> {

@@ -54,6 +54,6 @@ export function computeHourly(rows: HRow[], starts: string[], goals: (number | n
   });
   const warns = w.length ? w.slice(0, 5)
     : [{ s: G, h: "Sin observaciones.", m: dn.length ? "Las horas capturadas están dentro de la meta." : "Aún no hay horas capturadas." }];
-  return { calc, acc, kpis, warns, hasErrors: w.some((x) => x.s === R), raw: { P: sP, M: sM } };
+  return { calc, acc, kpis, warns, hasErrors: w.some((x) => x.s === R), raw: { P: sP, M: sM, par: sPar } };
 }
 export { N };

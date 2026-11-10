@@ -3,12 +3,17 @@
 import { useEffect, useState } from "react";
 import { A, G, R, dayLong, monthStartLabel, type TabId } from "@/lib/domain";
 import type { TableroData } from "@/lib/tablero";
+import TableroMensual from "./TableroMensual";
+import Dashboard from "./Dashboard";
 
-export default function Tablero({ day, canOpen, onOpen }: { day: string; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void }) {
+export type Mode = "dia" | "mes" | "dash";
+
+export default function Tablero({ day, mode, onMode, canOpen, onOpen }: { day: string; mode: Mode; onMode: (m: Mode) => void; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void }) {
   const [data, setData] = useState<TableroData | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    if (mode !== "dia") return;
     let off = false;
     (async () => {
       const r = await fetch(`/api/tablero?day=${day}`);
@@ -18,13 +23,24 @@ export default function Tablero({ day, canOpen, onOpen }: { day: string; canOpen
       setErr(""); setData(j);
     })();
     return () => { off = true; };
-  }, [day]);
+  }, [day, mode]);
+
+  const toggle = (
+    <div className="seg no-print" style={{ alignSelf: "flex-start" }}>
+      {([["dia", "Tablero del día"], ["mes", "Tablero mensual"], ["dash", "Dashboard"]] as [Mode, string][]).map(([m, t]) => (
+        <label key={m} className="seg-opt"><input type="radio" name="tmode" checked={mode === m} onChange={() => onMode(m)} />{t}</label>
+      ))}
+    </div>
+  );
+  if (mode === "mes") return <>{toggle}<TableroMensual day={day} /></>;
+  if (mode === "dash") return <>{toggle}<Dashboard day={day} /></>;
 
   if (err) return <div role="alert" style={{ padding: 12, borderRadius: 10, background: "#fde3e8", color: "#9a0022" }}>{err}</div>;
   if (!data) return <div className="muted">Cargando tablero…</div>;
 
   return (
     <>
+      {toggle}
       <div>
         <div className="kicker">Jornada {dayLong(data.day)}</div>
         <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05, maxWidth: 900, textWrap: "pretty" }}>{data.headline}</h1>

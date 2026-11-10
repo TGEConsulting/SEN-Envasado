@@ -5,7 +5,7 @@ import {
   MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL, dayChip,
   type Role, type TabId,
 } from "@/lib/domain";
-import Tablero from "./Tablero";
+import Tablero, { type Mode } from "./Tablero";
 import Detalle from "./Detalle";
 import Users from "./Users";
 import Captura from "./Captura";
@@ -23,6 +23,7 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const [tabState, setTab] = useState<TabId>("tablero");
   const [day, setDay] = useState<string | null>(null);
   const [days, setDays] = useState<string[]>([]);
+  const [mode, setMode] = useState<Mode>("dia");
   useEffect(() => {
     fetch("/api/days").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) { setDays(j.days); setDay(j.days[j.days.length - 1]); } });
   }, []);
@@ -39,7 +40,7 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
     t === "env" ? "Envasado" : t === "datos" && role === "Supervisor" ? "Entregas" : TAB_LABEL[t as TabId];
   const DETAIL = ["ent", ...MACHINE_TABS] as TabId[];
   const isDetail = DETAIL.includes(tab);
-  const showDays = tab === "tablero" || isDetail || tab === "rep" || tab === "focos" || tab === "tend";
+  const showDays = (tab === "tablero" && mode === "dia") || isDetail || tab === "rep" || tab === "focos" || tab === "tend";
 
   return (
     <div style={{ minHeight: "100vh", padding: "16px 16px 48px" }}>
@@ -101,7 +102,7 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
 
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
-            day ? <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} /> : <div className="muted">Cargando…</div>
+            day ? <Tablero day={day} mode={mode} onMode={setMode} canOpen={(t) => allowed.includes(t)} onOpen={setTab} /> : <div className="muted">Cargando…</div>
           ) : isDetail ? (
             day ? <Detalle key={tab} tab={tab} day={day} /> : <div className="muted">Cargando…</div>
           ) : tab === "cap" ? (
