@@ -115,3 +115,10 @@ insert into articles (id, description, process) values
   (1065, 'QUESO PANELA Q VACA BLANCA 300G TERMO', 'Multivac'),
   (1073, 'QUESO FRESCO RANCHERO VACA BLANCA DE 220 GRAMOS TERMO FORMADO SEMIRRIGIDO', 'Multivac')
 on conflict (id) do nothing;
+
+-- Configuración de la operación (horas esperadas, metas, peso objetivo, tolerancia): un documento versionado en la bitácora.
+create table if not exists settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);

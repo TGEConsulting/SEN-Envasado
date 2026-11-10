@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { body, fail } from "@/lib/http";
 import { getSession } from "@/lib/auth";
+import { loadConfig } from "@/lib/config-db";
 import { BATCH_MACHINES, N_BATCHES, emptyRows, type Row } from "@/lib/capture";
 
 const CAN_CAPTURE = ["Operador", "Supervisor", "Administrador"];
@@ -17,10 +18,11 @@ export async function GET(req: Request) {
   const u = new URL(req.url), day = u.searchParams.get("day"), machine = u.searchParams.get("machine");
   if (!isDay(day) || !isMachine(machine)) return fail("Fecha o máquina no válidas.");
   const db = sql();
-  const [recs, sheets] = await Promise.all([
+  const [recs, sheets, config] = await Promise.all([
     db`select batch_no, to_char(real_time,'HH24:MI') as real_time, downtime_min, kg_melted, piece_kg, pieces, merma_kg
        from batch_records where day = ${day} and machine = ${machine} order by batch_no`,
     db`select team, leader, supervisor, signed_at from shift_sheets where day = ${day} and machine = ${machine} order by updated_at desc limit 1`,
+    loadConfig(db),
   ]);
   const rows = emptyRows();
   for (const r of recs) {
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
   }
   const sh = sheets[0];
   return NextResponse.json({
-    rows, team: sh?.team ?? 1, leader: sh?.leader ?? "", supervisor: sh?.supervisor ?? "", signed: !!sh?.signed_at,
+    rows, team: sh?.team ?? 1, leader: sh?.leader ?? "", supervisor: sh?.supervisor ?? "", signed: !!sh?.signed_at, config,
   });
 }
 

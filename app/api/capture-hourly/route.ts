@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { body, fail } from "@/lib/http";
 import { getSession } from "@/lib/auth";
+import { loadConfig } from "@/lib/config-db";
 import { HOURLY_PRODUCTS, HOUR_STARTS, emptyProducts, type HRow } from "@/lib/multivac";
 
 const CAN_CAPTURE = ["Operador", "Supervisor", "Administrador"];
@@ -17,10 +18,11 @@ export async function GET(req: Request) {
   const day = new URL(req.url).searchParams.get("day");
   if (!isDay(day)) return fail("Fecha no válida.");
   const db = sql();
-  const [recs, sheets] = await Promise.all([
+  const [recs, sheets, config] = await Promise.all([
     db`select article_id, hour_idx, to_char(end_time,'HH24:MI') as end_time, pieces, stored, downtime_min, reel_changes, reel_change_min
        from hourly_records where day = ${day} order by article_id, hour_idx`,
     db`select team, leader, supervisor, signed_at from shift_sheets where day = ${day} and machine = 'Multivac' order by updated_at desc limit 1`,
+    loadConfig(db),
   ]);
   const products = emptyProducts();
   for (const r of recs) {
@@ -31,7 +33,7 @@ export async function GET(req: Request) {
     };
   }
   const sh = sheets[0];
-  return NextResponse.json({ products, team: sh?.team ?? 1, leader: sh?.leader ?? "", supervisor: sh?.supervisor ?? "", signed: !!sh?.signed_at });
+  return NextResponse.json({ products, team: sh?.team ?? 1, leader: sh?.leader ?? "", supervisor: sh?.supervisor ?? "", signed: !!sh?.signed_at, config });
 }
 
 export async function PUT(req: Request) {

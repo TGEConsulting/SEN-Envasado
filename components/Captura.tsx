@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { A, type Sem } from "@/lib/domain";
 import MultivacHoras from "./MultivacHoras";
 import { HOURLY_PRODUCTS, computeHourly, emptyProducts, type HRow } from "@/lib/multivac";
-import { CAPTURE_MACHINES, DEFAULT_TIMES, TARGET_WEIGHT_G, compute, emptyRows, hasDowntime, type Row } from "@/lib/capture";
+import { CAPTURE_MACHINES, compute, emptyRows, hasDowntime, type Row } from "@/lib/capture";
+import { defaultConfig, type BatchMachine, type Config } from "@/lib/config";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const lab: React.CSSProperties = { fontSize: 12, color: "var(--color-neutral-700)" };
@@ -20,13 +21,15 @@ export default function Captura({ role }: { role: string }) {
   const [rows, setRows] = useState<Row[]>(emptyRows());
   const [products, setProducts] = useState(emptyProducts());
   const [product, setProduct] = useState(HOURLY_PRODUCTS[0][0]);
+  const [config, setConfig] = useState<Config>(defaultConfig());
   const [signed, setSigned] = useState(false);
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isMulti = machine === "Multivac";
   const locked = signed && role !== "Administrador";
-  const r = useMemo(() => compute(machine, rows), [machine, rows]);
+  const bcfg = config.batch[(isMulti ? "Tecnovac" : machine) as BatchMachine];
+  const r = useMemo(() => compute(machine, rows, { ...bcfg, tolerance: config.tolerance }), [machine, rows, bcfg, config.tolerance]);
   const showPar = hasDowntime(machine);
 
   const load = useCallback(async () => {
@@ -34,6 +37,7 @@ export default function Captura({ role }: { role: string }) {
     const res = await fetch(isMulti ? `/api/capture-hourly?day=${day}` : `/api/capture?day=${day}&machine=${encodeURIComponent(machine)}`);
     if (!res.ok) return setMsg({ t: "No se pudo cargar la hoja.", bad: true });
     const j = await res.json();
+    setConfig(j.config);
     if (isMulti) setProducts(j.products); else setRows(j.rows); setTeam(j.team); setLeader(j.leader); setSupervisor(j.supervisor); setSigned(j.signed);
   }, [day, machine, isMulti]);
   useEffect(() => { load(); }, [load]);
@@ -42,7 +46,7 @@ export default function Captura({ role }: { role: string }) {
     setRows((rs) => rs.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
 
   async function save(sign: boolean) {
-    const bad = isMulti ? HOURLY_PRODUCTS.some(([id]) => computeHourly(products[id]).hasErrors) : r.hasErrors;
+    const bad = isMulti ? HOURLY_PRODUCTS.some(([id]) => computeHourly(products[id], config.hourly.starts, config.hourly.goals[id]).hasErrors) : r.hasErrors;
     if (sign && bad) return setMsg({ t: "Corrige los batches en rojo antes de firmar y enviar.", bad: true });
     if (sign && (!leader.trim() || !supervisor.trim())) return setMsg({ t: "Escribe el nombre del líder y del supervisor para firmar.", bad: true });
     setBusy(true); setMsg(null);
@@ -94,7 +98,7 @@ export default function Captura({ role }: { role: string }) {
       </div>
 
       {isMulti ? (
-        <MultivacHoras product={product} onProduct={setProduct} rows={products[product]} locked={locked}
+        <MultivacHoras starts={config.hourly.starts} goals={config.hourly.goals[product]} product={product} onProduct={setProduct} rows={products[product]} locked={locked}
           onChange={(i: number, k: keyof HRow, v: string) =>
             setProducts((p) => ({ ...p, [product]: p[product].map((x, j) => (j === i ? { ...x, [k]: v } : x)) }))} />
       ) : (<>
@@ -114,12 +118,12 @@ export default function Captura({ role }: { role: string }) {
             <div className="card-title" style={{ fontSize: 19 }}>Batches</div>
             <span className="muted" style={{ fontSize: 12 }}>Horas esperadas según Configuración · {machine}. El resto se calcula.</span>
           </div>
-          <table className="table" style={{ minWidth: 1100 }}>
+          <table className="table" style={{ minWidth: 1300 }}>
             <thead><tr>
               <th>Batch</th><th>Esperada</th><th>Hora real término</th><th style={{ textAlign: "right" }}>Retraso</th>
               {showPar && <th style={{ textAlign: "right" }}>Paro por MTO. (min)</th>}
               <th style={{ textAlign: "right" }}>Kg fundidos</th><th style={{ textAlign: "right" }}>Peso prom. pieza (kg)</th>
-              <th style={{ textAlign: "right" }}>Pzs empacadas</th><th style={{ textAlign: "right" }}>Total kg</th>
+              <th style={{ textAlign: "right" }}>Pzs empacadas</th><th style={{ textAlign: "right" }}>Meta de piezas</th><th style={{ textAlign: "right" }}>Dif. vs meta</th><th style={{ textAlign: "right" }}>Total kg</th>
               <th style={{ textAlign: "right" }}>Merma (kg)</th><th style={{ textAlign: "right" }}>Total + merma</th>
               <th style={{ textAlign: "right" }}>Rendim.</th><th style={{ textAlign: "right" }}>Kg desecho</th><th style={{ textAlign: "right" }}>% desecho</th>
             </tr></thead>
@@ -133,6 +137,7 @@ export default function Captura({ role }: { role: string }) {
                   <td style={{ textAlign: "right" }}>{Num({ i, k: "kg", w: 72 })}</td>
                   <td style={{ textAlign: "right" }}>{Num({ i, k: "peso", w: 72 })}</td>
                   <td style={{ textAlign: "right" }}>{Num({ i, k: "pzs", w: 76, mode: "numeric" })}</td>
+                  <td style={{ textAlign: "right" }}>{c.meta}</td><td style={{ textAlign: "right" }}>{c.dm}</td>
                   <td style={{ textAlign: "right" }}>{c.tot}</td>
                   <td style={{ textAlign: "right" }}>{Num({ i, k: "mer", w: 72 })}</td>
                   <td style={{ textAlign: "right" }}>{c.tm}</td>
@@ -142,13 +147,13 @@ export default function Captura({ role }: { role: string }) {
               <tr style={{ fontWeight: 600 }}>
                 <td colSpan={4} style={{ textAlign: "right", letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>Acumulado</td>
                 {showPar && <td style={{ textAlign: "right" }}>{r.acc.paro}</td>}
-                <td></td><td></td><td style={{ textAlign: "right" }}>{r.acc.pzs}</td><td style={{ textAlign: "right" }}>{r.acc.tot}</td>
+                <td></td><td></td><td style={{ textAlign: "right" }}>{r.acc.pzs}</td><td style={{ textAlign: "right" }}>{r.acc.meta}</td><td style={{ textAlign: "right" }}>{r.acc.dm}</td><td style={{ textAlign: "right" }}>{r.acc.tot}</td>
                 <td style={{ textAlign: "right" }}>{r.acc.mer}</td><td style={{ textAlign: "right" }}>{r.acc.tm}</td>
                 <td style={{ textAlign: "right" }}>{r.acc.rend}</td><td style={{ textAlign: "right" }}>{r.acc.des}</td><td style={{ textAlign: "right" }}>{r.acc.pdes}</td>
               </tr>
             </tbody>
           </table>
-          {!TARGET_WEIGHT_G[machine] && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Sin peso objetivo configurado para {machine}.</div>}
+          {!bcfg.weightG && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Sin peso objetivo configurado para {machine}.</div>}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

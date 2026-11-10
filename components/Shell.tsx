@@ -9,6 +9,8 @@ import Tablero from "./Tablero";
 import Users from "./Users";
 import Captura from "./Captura";
 import Datos from "./Datos";
+import Configuracion from "./Configuracion";
+import Bitacora from "./Bitacora";
 
 const ORDER = ["tablero", "focos", "tend", "env", "ent", "cap", "datos", "rep", "bit", "config", "users"] as const;
 const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, ent: 2, cap: 3, datos: 3, rep: 3, bit: 3, config: 3, users: 3 };
@@ -94,6 +96,10 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
             <Captura role={role} />
           ) : tab === "datos" && ["Gerencia", "Planeador", "Administrador"].includes(role) ? (
             <Datos role={role} />
+          ) : tab === "config" && ["Gerencia", "Administrador"].includes(role) ? (
+            <Configuracion />
+          ) : tab === "bit" ? (
+            <Bitacora />
           ) : tab === "users" ? (
             <Users meId={meId} />
           ) : (

@@ -5,11 +5,11 @@ import { computeHourly, HOURLY_PRODUCTS, type HRow } from "@/lib/multivac";
 const cell = (w: number): React.CSSProperties => ({ width: w, padding: "4px 6px", minHeight: 30, textAlign: "right" });
 const right: React.CSSProperties = { textAlign: "right" };
 
-export default function MultivacHoras({ product, onProduct, rows, onChange, locked }: {
-  product: number; onProduct: (id: number) => void; rows: HRow[]; locked: boolean;
+export default function MultivacHoras({ product, onProduct, rows, onChange, locked, starts, goals }: {
+  starts: string[]; goals: (number | null)[]; product: number; onProduct: (id: number) => void; rows: HRow[]; locked: boolean;
   onChange: (i: number, k: keyof HRow, v: string) => void;
 }) {
-  const r = computeHourly(rows);
+  const r = computeHourly(rows, starts, goals);
   const name = HOURLY_PRODUCTS.find(([id]) => id === product)?.[1] ?? "";
   const inp = (i: number, k: keyof HRow, w: number) => (
     <input className="input" inputMode="numeric" style={cell(w)} value={rows[i][k]} disabled={locked}
@@ -48,7 +48,7 @@ export default function MultivacHoras({ product, onProduct, rows, onChange, lock
       <div className="blueprint" style={{ padding: 16, overflowX: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <div className="card-title" style={{ fontSize: 19 }}>Empaque diario · {name}</div>
-          <span className="muted" style={{ fontSize: 12 }}>Meta de 900 pzs por hora (se configurará en Configuración › Multivac). El resto se calcula.</span>
+          <span className="muted" style={{ fontSize: 12 }}>La meta por hora se configura en Configuración › Multivac. El resto se calcula.</span>
         </div>
         <table className="table" style={{ minWidth: 1100 }}>
           <thead><tr>

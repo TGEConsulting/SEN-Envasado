@@ -2,8 +2,8 @@
 import { A, G, N, R, n0, pct, sem, type Sem } from "./domain";
 
 export const HOURLY_PRODUCTS: [number, string][] = [[2135, "Oaxaca 3B 400 g"], [1065, "Panela 300 g"], [1073, "Ranchero 220 g"]];
-export const HOUR_STARTS = Array.from({ length: 15 }, (_, i) => String(8 + i).padStart(2, "0") + ":00");
-export const DEFAULT_HOURLY_GOAL = 900; // pzs por hora (se configurará en Configuración › Multivac)
+import { N_HOURS } from "./config";
+export const HOUR_STARTS = Array.from({ length: N_HOURS }, (_, i) => String(8 + i).padStart(2, "0") + ":00"); // por defecto; la vigente sale de Configuración
 
 export type HRow = { fin: string; pzs: string; alm: string; paro: string; bob: string; tcb: string };
 export const emptyHRow = (): HRow => ({ fin: "", pzs: "", alm: "", paro: "", bob: "", tcb: "" });
@@ -19,19 +19,20 @@ const dur = (a: string, b: string) => { const d = mins(b) - mins(a); return isFi
 export type HCalc = { ini: string; meta: string; diff: string; rend: string; est: Sem | null; trab: string };
 export type HKpi = { label: string; val: string; sub: string; bar: string };
 
-export function computeHourly(rows: HRow[], goal = DEFAULT_HOURLY_GOAL) {
+export function computeHourly(rows: HRow[], starts: string[], goals: (number | null)[]) {
   const items = rows.map((r, i) => {
+    const goal = goals[i] ?? 0, ini0 = starts[i] ?? HOUR_STARTS[i];
     const pzs = num(r.pzs), alm = num(r.alm), paro = num(r.paro) || 0, bob = num(r.bob) || 0, tcb = num(r.tcb) || 0;
     const has = isFinite(pzs), rend = has && goal > 0 ? pzs / goal : null;
-    const trab = has || paro || tcb ? dur(HOUR_STARTS[i], r.fin) - paro - tcb : NaN;
-    return { i, ini: HOUR_STARTS[i], fin: r.fin, lab: `${HOUR_STARTS[i]} – ${r.fin || "…"}`, pzs, alm, paro, bob, tcb, has, rend, trab };
+    const trab = has || paro || tcb ? dur(ini0, r.fin) - paro - tcb : NaN;
+    return { i, goal, ini: ini0, fin: r.fin, lab: `${ini0} – ${r.fin || "…"}`, pzs, alm, paro, bob, tcb, has, rend, trab };
   });
   const calc: HCalc[] = items.map((c) => ({
-    ini: c.ini, meta: n0(goal), diff: c.has ? sg(c.pzs - goal) : "—", rend: pct(c.rend),
+    ini: c.ini, meta: c.goal > 0 ? n0(c.goal) : "—", diff: c.has && c.goal > 0 ? sg(c.pzs - c.goal) : "—", rend: pct(c.rend),
     est: c.has ? sem(c.rend) : null, trab: isFinite(c.trab) ? c.trab + " min" : "—",
   }));
   const dn = items.filter((c) => c.has);
-  const sM = dn.length * goal, sP = dn.reduce((a, c) => a + c.pzs, 0), sA = dn.reduce((a, c) => a + (c.alm || 0), 0);
+  const sM = dn.reduce((a, c) => a + c.goal, 0), sP = dn.reduce((a, c) => a + c.pzs, 0), sA = dn.reduce((a, c) => a + (c.alm || 0), 0);
   const sPar = items.reduce((a, c) => a + c.paro, 0), sB = items.reduce((a, c) => a + c.bob, 0);
   const sTcb = items.reduce((a, c) => a + c.tcb, 0), sT = items.reduce((a, c) => a + (isFinite(c.trab) ? c.trab : 0), 0);
   const R1 = sM ? sP / sM : null;
@@ -47,7 +48,7 @@ export function computeHourly(rows: HRow[], goal = DEFAULT_HOURLY_GOAL) {
   ];
   const w: { s: Sem; h: string; m: string }[] = [];
   items.forEach((c) => {
-    if (c.has && c.rend! < 0.85) w.push({ s: A, h: c.lab + ":", m: `rendimiento ${pct(c.rend)} bajo la meta de ${n0(goal)} pzs.` });
+    if (c.has && c.rend! < 0.85) w.push({ s: A, h: c.lab + ":", m: `rendimiento ${pct(c.rend)} bajo la meta de ${n0(c.goal)} pzs.` });
     if (c.paro > 30) w.push({ s: A, h: c.lab + ":", m: `paro de ${c.paro} min.` });
     if (!c.has && (c.paro || c.bob || c.alm)) w.push({ s: R, h: c.lab + ":", m: "faltan las piezas empacadas." });
   });
