@@ -12,6 +12,7 @@ import Captura from "./Captura";
 import Datos from "./Datos";
 import Configuracion from "./Configuracion";
 import Bitacora from "./Bitacora";
+import Reportes from "./Reportes";
 
 const ORDER = ["tablero", "focos", "tend", "env", "ent", "cap", "datos", "rep", "bit", "config", "users"] as const;
 const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, ent: 2, cap: 3, datos: 3, rep: 3, bit: 3, config: 3, users: 3 };
@@ -36,7 +37,7 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
     t === "env" ? "Envasado" : t === "datos" && role === "Supervisor" ? "Entregas" : TAB_LABEL[t as TabId];
   const DETAIL = ["ent", ...MACHINE_TABS] as TabId[];
   const isDetail = DETAIL.includes(tab);
-  const showDays = tab === "tablero" || isDetail;
+  const showDays = tab === "tablero" || isDetail || tab === "rep";
 
   return (
     <div style={{ minHeight: "100vh", padding: "16px 16px 48px" }}>
@@ -107,6 +108,8 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
             <Datos role={role} />
           ) : tab === "config" && ["Gerencia", "Administrador"].includes(role) ? (
             <Configuracion />
+          ) : tab === "rep" ? (
+            day ? <Reportes day={day} /> : <div className="muted">Cargando…</div>
           ) : tab === "bit" ? (
             <Bitacora />
           ) : tab === "users" ? (

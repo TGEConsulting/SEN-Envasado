@@ -32,7 +32,7 @@ export type Detalle = {
 function spark(days: string[], day: string, vals: (number | null)[]): SparkBar[] {
   return days.map((d, i) => ({ lab: dayChip(d), txt: pct(vals[i]), h: vals[i] == null ? 4 : Math.max(4, Math.round((Math.min(vals[i] as number, 1.3) / 1.3) * 110)), c: sem(vals[i]).c, cur: d === day }));
 }
-const hRowsOf = (raw: DayRaw, id: number): HRow[] => {
+export const hRowsOf = (raw: DayRaw, id: number): HRow[] => {
   const rows: HRow[] = Array.from({ length: 15 }, () => ({ fin: "", pzs: "", alm: "", paro: "", bob: "", tcb: "" }));
   for (const h of raw.hourly.filter((x) => Number(x.article_id) === id)) {
     const i = Number(h.hour_idx);
