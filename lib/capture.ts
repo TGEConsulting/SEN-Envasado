@@ -93,6 +93,7 @@ export function compute(machine: string, rows: Row[], cfg: CaptureCfg) {
     ? w.slice(0, 5).concat(w.length > 5 ? [{ s: N, h: `Y ${w.length - 5} observaciones más.`, m: "" }] : [])
     : [{ s: G, h: "Sin observaciones.", m: "Los valores están dentro de los rangos esperados." }];
 
-  return { calc, acc, kpis, warns, hasErrors: w.some((x) => x.s === R) };
+  const raw = { sPz, sKg, sTm, sDes, sPar, nTimed: wr.length, onT, avgPeso, tg, sMt, sMp };
+  return { calc, acc, kpis, warns, hasErrors: w.some((x) => x.s === R), raw };
 }
 export { sg };

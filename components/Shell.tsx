@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  DAYS, DAY_LABEL, MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL,
-  type Day, type Role, type TabId,
+  MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL, dayChip,
+  type Role, type TabId,
 } from "@/lib/domain";
 import Tablero from "./Tablero";
 import Users from "./Users";
@@ -17,7 +17,9 @@ const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, e
 
 export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const [tabState, setTab] = useState<TabId>("tablero");
-  const [day, setDay] = useState<Day>(16);
+  const [day, setDay] = useState<string | null>(null);
+  const [days, setDays] = useState<string[]>([]);
+  const onData = useCallback((ds: string[], d: string) => { setDays(ds); setDay(d); }, []);
 
   const signOut = async () => { await fetch("/api/auth/signout", { method: "POST" }); window.location.href = "/"; };
 
@@ -48,12 +50,12 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
           </div>
           {showDays && (
             <div style={{ display: "flex", overflowX: "auto", maxWidth: "100%", gap: 6 }}>
-              {DAYS.map((d) => (
+              {days.map((d) => (
                 <button key={d} onClick={() => setDay(d)} aria-pressed={d === day}
                   style={{ cursor: "pointer", font: "inherit", fontSize: 13, flex: "none", whiteSpace: "nowrap", padding: "6px 10px",
                     border: `1px solid ${d === day ? "#0d4884" : "var(--color-divider)"}`,
                     background: d === day ? "#0d4884" : "transparent", color: d === day ? "#fff" : "var(--color-text)" }}>
-                  {DAY_LABEL[d]}
+                  {dayChip(d)}
                 </button>
               ))}
             </div>
@@ -91,10 +93,10 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
 
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
-            <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
+            <Tablero day={day} onData={onData} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
           ) : tab === "cap" ? (
             <Captura role={role} />
-          ) : tab === "datos" && ["Gerencia", "Planeador", "Administrador"].includes(role) ? (
+          ) : tab === "datos" && ["Gerencia", "Planeador", "Administrador", "Supervisor"].includes(role) ? (
             <Datos role={role} />
           ) : tab === "config" && ["Gerencia", "Administrador"].includes(role) ? (
             <Configuracion />

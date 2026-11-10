@@ -2,15 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PROCESSES, n0 } from "@/lib/domain";
+import Entregado from "./Entregado";
 
 type Kind = "empaque" | "entregas";
+type View = Kind | "entregado";
 type Row = { id: number; description: string; process: string; qty: number };
 const lab: React.CSSProperties = { fontSize: 12, color: "var(--color-neutral-700)" };
 const today = () => new Date().toISOString().slice(0, 10);
 const shortDay = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("es-MX", { day: "2-digit", month: "short", timeZone: "UTC" });
 
 export default function Datos({ role }: { role: string }) {
-  const [kind, setKind] = useState<Kind>("empaque");
+  const programs = role !== "Supervisor"; // el supervisor solo captura lo entregado
+  const [view, setView] = useState<View>(programs ? "empaque" : "entregado");
+  const kind: Kind = view === "entregas" ? "entregas" : "empaque";
   const [day, setDay] = useState(today());
   const [orig, setOrig] = useState<Row[]>([]);
   const [edit, setEdit] = useState<Record<number, { qty: string; process: string }>>({});
@@ -24,13 +28,14 @@ export default function Datos({ role }: { role: string }) {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    if (view === "entregado") return;
     const r = await fetch(`/api/datos?day=${day}&kind=${kind}`);
     if (!r.ok) return setMsg({ t: "No se pudieron cargar los datos.", bad: true });
     const j = await r.json();
     setOrig(j.rows); setDays(j.days); setCanEdit(j.canEdit);
     setEdit(Object.fromEntries(j.rows.map((x: Row) => [x.id, { qty: String(x.qty), process: x.process }])));
     setReason("");
-  }, [day, kind]);
+  }, [day, kind, view]);
   useEffect(() => { load(); }, [load]);
 
   const changed = useMemo(() => orig.filter((o) => {
@@ -75,19 +80,22 @@ export default function Datos({ role }: { role: string }) {
   }
 
   const setE = (id: number, k: "qty" | "process", v: string) => setEdit((p) => ({ ...p, [id]: { ...p[id], [k]: v } }));
-  const title = kind === "empaque" ? "Programa de empaque" : "Programa de entregas";
+  const title = view === "entregado" ? "Entregado a embarques" : kind === "empaque" ? "Programa de empaque" : "Programa de entregas";
 
   return (
     <>
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
         <div><div className="kicker">Entradas de datos</div><h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05 }}>{title}</h1></div>
         <div className="seg">
-          {(["empaque", "entregas"] as Kind[]).map((k) => (
-            <label key={k} className="seg-opt"><input type="radio" name="dt" checked={kind === k} onChange={() => setKind(k)} />{k === "empaque" ? "Prog. empaque" : "Prog. entregas"}</label>
-          ))}
+          {([["empaque", "Prog. empaque"], ["entregas", "Prog. entregas"], ["entregado", "Entregado"]] as [View, string][])
+            .filter(([k]) => programs || k === "entregado")
+            .map(([k, t]) => (
+              <label key={k} className="seg-opt"><input type="radio" name="dt" checked={view === k} onChange={() => setView(k)} />{t}</label>
+            ))}
         </div>
       </div>
 
+      {view === "entregado" ? <Entregado day={day} onDay={setDay} /> : <>
       {msg && <div role="status" style={{ padding: 12, fontSize: 14, borderRadius: 10, background: msg.bad ? "#fde3e8" : "#e8f5d6", color: msg.bad ? "#9a0022" : "#2f5f0b" }}>{msg.t}</div>}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
@@ -155,6 +163,7 @@ export default function Datos({ role }: { role: string }) {
           </tbody>
         </table>
       </div>
+      </>}
     </>
   );
 }
