@@ -24,7 +24,7 @@ const sg = (n: number) => (n > 0 ? "+" : "") + n0(n);
 export const delaySem = (min: number, tol: number): Sem => (min <= tol ? G : min <= 20 ? A : R);
 
 export type Calc = {
-  n: number; exp: string; meta: string; dm: string; retTxt: string; retSem: Sem | null; tot: string; tm: string;
+  n: number; retN: number | null; exp: string; meta: string; dm: string; retTxt: string; retSem: Sem | null; tot: string; tm: string;
   rend: string; rendWarn: boolean; des: string; pdes: string; ok: boolean;
 };
 export type Kpi = { label: string; val: string; sub: string; bar: string };
@@ -45,7 +45,7 @@ export function compute(machine: string, rows: Row[], cfg: CaptureCfg) {
   }).filter((c) => isFinite(c.exp));
 
   const calc: Calc[] = items.map((c) => ({
-    n: c.i + 1, exp: hhmm(c.exp), ok: c.ok,
+    n: c.i + 1, retN: isFinite(c.ret) ? c.ret : null, exp: hhmm(c.exp), ok: c.ok,
     meta: isFinite(c.meta) && c.meta > 0 ? n0(c.meta) : "—", dm: c.ok && isFinite(c.meta) && c.meta > 0 ? sg(c.pzs - c.meta) : "—",
     retTxt: isFinite(c.ret) ? (c.ret > 0 ? "+" : "") + Math.round(c.ret) + " min" : "—",
     retSem: isFinite(c.ret) ? delaySem(c.ret, tol) : null,

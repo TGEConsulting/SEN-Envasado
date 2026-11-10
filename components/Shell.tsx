@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL, dayChip,
   type Role, type TabId,
 } from "@/lib/domain";
 import Tablero from "./Tablero";
+import Detalle from "./Detalle";
 import Users from "./Users";
 import Captura from "./Captura";
 import Datos from "./Datos";
@@ -19,7 +20,9 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const [tabState, setTab] = useState<TabId>("tablero");
   const [day, setDay] = useState<string | null>(null);
   const [days, setDays] = useState<string[]>([]);
-  const onData = useCallback((ds: string[], d: string) => { setDays(ds); setDay(d); }, []);
+  useEffect(() => {
+    fetch("/api/days").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) { setDays(j.days); setDay(j.days[j.days.length - 1]); } });
+  }, []);
 
   const signOut = async () => { await fetch("/api/auth/signout", { method: "POST" }); window.location.href = "/"; };
 
@@ -31,7 +34,9 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const goPrim = (t: string) => setTab(t === "env" ? (envAllowed.includes(tab) ? tab : envAllowed[0]) : (t as TabId));
   const labelOf = (t: string) =>
     t === "env" ? "Envasado" : t === "datos" && role === "Supervisor" ? "Entregas" : TAB_LABEL[t as TabId];
-  const showDays = tab === "tablero";
+  const DETAIL = ["ent", ...MACHINE_TABS] as TabId[];
+  const isDetail = DETAIL.includes(tab);
+  const showDays = tab === "tablero" || isDetail;
 
   return (
     <div style={{ minHeight: "100vh", padding: "16px 16px 48px" }}>
@@ -93,7 +98,9 @@ export default function Shell({ role, meId }: { role: Role; meId: number }) {
 
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
-            <Tablero day={day} onData={onData} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
+            day ? <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} /> : <div className="muted">Cargando…</div>
+          ) : isDetail ? (
+            day ? <Detalle key={tab} tab={tab} day={day} /> : <div className="muted">Cargando…</div>
           ) : tab === "cap" ? (
             <Captura role={role} />
           ) : tab === "datos" && ["Gerencia", "Planeador", "Administrador", "Supervisor"].includes(role) ? (

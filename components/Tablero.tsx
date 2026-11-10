@@ -4,24 +4,20 @@ import { useEffect, useState } from "react";
 import { A, G, R, dayLong, monthStartLabel, type TabId } from "@/lib/domain";
 import type { TableroData } from "@/lib/tablero";
 
-export default function Tablero({ day, onData, canOpen, onOpen }: {
-  day: string | null; onData: (days: string[], day: string) => void; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void;
-}) {
+export default function Tablero({ day, canOpen, onOpen }: { day: string; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void }) {
   const [data, setData] = useState<TableroData | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let off = false;
     (async () => {
-      const r = await fetch("/api/tablero" + (day ? `?day=${day}` : ""));
+      const r = await fetch(`/api/tablero?day=${day}`);
       if (off) return;
       if (!r.ok) return setErr("No se pudo cargar el tablero.");
       const j: TableroData = await r.json();
-      setErr(""); setData(j); onData(j.days, j.day);
+      setErr(""); setData(j);
     })();
     return () => { off = true; };
-    // onData es estable en Shell; solo recargamos al cambiar de día.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
   if (err) return <div role="alert" style={{ padding: 12, borderRadius: 10, background: "#fde3e8", color: "#9a0022" }}>{err}</div>;

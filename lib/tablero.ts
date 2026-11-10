@@ -1,20 +1,21 @@
-// Tablero del día calculado con los datos reales de Neon (programas, captura por batch/hora, entregas).
+// Cálculo del día con los datos reales de Neon (programas, captura por batch/hora, entregas).
+// `summarizeDay` es la única fuente de números: la usan el tablero y el detalle por máquina.
 import { sql } from "./db";
 import { loadConfig } from "./config-db";
 import { compute, emptyRows, type Row } from "./capture";
-import { computeHourly, emptyHRows } from "./multivac";
 import { MULTIVAC_IDS, MULTIVAC_NAMES, type Config } from "./config";
 import { N, n0, pct, sem, type Sem } from "./domain";
 
 type Db = ReturnType<typeof sql>;
+type R = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type TabId = "ent" | "ter" | "mol" | "mk" | "embo" | "vac";
 export type CardData = { title: string; big: string; bigLabel: string; st: Sem; tab: TabId; lines: { a: string; b: string }[]; foot: string };
 export type TableroData = { day: string; days: string[]; headline: string; cards: CardData[]; month: { a: string; b: string }[] };
+export type DayRaw = { progs: R[]; batch: R[]; hourly: R[]; deliv: R[] };
 
-const MAQ: { name: "Termo MK" | "Embolsado" | "Polar"; tab: TabId }[] = [
-  { name: "Termo MK", tab: "mk" }, { name: "Embolsado", tab: "embo" }, { name: "Polar", tab: "vac" },
-];
-const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
+export const BATCH_TAB: Record<string, "Tecnovac" | "Termo MK" | "Embolsado" | "Polar"> = { mol: "Tecnovac", mk: "Termo MK", embo: "Embolsado", vac: "Polar" };
+const MAQ = [{ name: "Termo MK", tab: "mk" }, { name: "Embolsado", tab: "embo" }, { name: "Polar", tab: "vac" }] as const;
+export const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
 export async function recentDays(db: Db): Promise<string[]> {
   const r = await db`select to_char(day,'YYYY-MM-DD') as d from (
@@ -23,20 +24,38 @@ export async function recentDays(db: Db): Promise<string[]> {
   return r.map((x) => x.d as string).reverse();
 }
 
-export async function loadTablero(db: Db, day: string, days: string[]): Promise<TableroData> {
-  const cfg = await loadConfig(db);
+// Datos crudos de varios días en 4 consultas.
+export async function loadRaw(db: Db, days: string[]): Promise<Record<string, DayRaw>> {
   const [progs, batch, hourly, deliv] = await Promise.all([
-    db`select p.kind, p.article_id, a.process, p.qty from programs p join articles a on a.id = p.article_id where p.day = ${day}`,
-    db`select machine, batch_no, to_char(real_time,'HH24:MI') as real, downtime_min, kg_melted, piece_kg, pieces, merma_kg from batch_records where day = ${day}`,
-    db`select article_id, hour_idx, to_char(end_time,'HH24:MI') as fin, pieces, stored, downtime_min, reel_changes, reel_change_min from hourly_records where day = ${day}`,
-    db`select article_id, qty from deliveries where day = ${day}`,
+    db`select to_char(p.day,'YYYY-MM-DD') as d, p.kind, p.article_id, a.description, a.process, p.qty from programs p join articles a on a.id = p.article_id where p.day = any(${days}::date[])`,
+    db`select to_char(day,'YYYY-MM-DD') as d, machine, batch_no, to_char(real_time,'HH24:MI') as real, downtime_min, kg_melted, piece_kg, pieces, merma_kg from batch_records where day = any(${days}::date[])`,
+    db`select to_char(day,'YYYY-MM-DD') as d, article_id, hour_idx, to_char(end_time,'HH24:MI') as fin, pieces, stored, downtime_min, reel_changes, reel_change_min from hourly_records where day = any(${days}::date[])`,
+    db`select to_char(day,'YYYY-MM-DD') as d, article_id, qty from deliveries where day = any(${days}::date[])`,
   ]);
+  const out: Record<string, DayRaw> = Object.fromEntries(days.map((d) => [d, { progs: [], batch: [], hourly: [], deliv: [] }]));
+  for (const r of progs) out[r.d]?.progs.push(r);
+  for (const r of batch) out[r.d]?.batch.push(r);
+  for (const r of hourly) out[r.d]?.hourly.push(r);
+  for (const r of deliv) out[r.d]?.deliv.push(r);
+  return out;
+}
 
-  // ── programas ──
+export const rowsOf = (batch: R[], machine: string): Row[] => {
+  const rows = emptyRows();
+  for (const r of batch.filter((b) => b.machine === machine)) {
+    const i = Number(r.batch_no) - 1;
+    if (i >= 0 && i < rows.length) rows[i] = { real: r.real ?? "", paro: r.downtime_min?.toString() ?? "", kg: r.kg_melted?.toString() ?? "", peso: r.piece_kg?.toString() ?? "", pzs: r.pieces?.toString() ?? "", mer: r.merma_kg?.toString() ?? "" };
+  }
+  return rows;
+};
+
+export function summarizeDay(raw: DayRaw, cfg: Config) {
+  const { progs, batch, hourly, deliv } = raw;
+  // programas
   const progByProc: Record<string, { qty: number; n: number }> = {};
   const progMv: Record<number, number> = {};
-  let progEnt = 0;
   const progEntById = new Map<number, number>();
+  let progEnt = 0;
   for (const r of progs) {
     const q = Number(r.qty);
     if (r.kind === "empaque") {
@@ -44,29 +63,16 @@ export async function loadTablero(db: Db, day: string, days: string[]): Promise<
       if (r.process === "Multivac") progMv[Number(r.article_id)] = q;
     } else { progEnt += q; progEntById.set(Number(r.article_id), q); }
   }
-
-  // ── entregas ──
-  let entCard: CardData;
-  if (deliv.length) {
-    const delById = new Map(deliv.map((r) => [Number(r.article_id), Number(r.qty)]));
-    const ids = new Set([...progEntById.keys(), ...delById.keys()]);
-    let tot = 0, capped = 0, falt = 0, exc = 0, full = 0, withProg = 0;
-    for (const id of ids) {
-      const p = progEntById.get(id) ?? 0, d = delById.get(id) ?? 0;
-      tot += d; capped += Math.min(d, p); falt += Math.max(p - d, 0); exc += Math.max(d - p, 0);
-      if (p > 0) { withProg++; if (d >= p) full++; }
-    }
-    const fill = ratio(capped, progEnt);
-    entCard = { title: "Entregas de PT", big: pct(fill), bigLabel: "Fill rate", st: sem(fill), tab: "ent",
-      lines: [{ a: "Cumplimiento en volumen", b: pct(ratio(tot, progEnt)) }, { a: "SKUs completos", b: `${full} de ${withProg}` },
-              { a: "Piezas faltantes", b: n0(falt) }, { a: "Piezas excedentes", b: n0(exc) }],
-      foot: `Programadas ${n0(progEnt)} · entregadas ${n0(tot)}` };
-  } else {
-    entCard = { title: "Entregas de PT", big: "—", bigLabel: "Fill rate", st: N, tab: "ent",
-      lines: [{ a: "Sin registro de entregas", b: "" }], foot: progEnt ? `Programadas ${n0(progEnt)}` : "" };
+  // entregas
+  const delById = new Map(deliv.map((r) => [Number(r.article_id), Number(r.qty)]));
+  let entTot = 0, entCapped = 0, entFalt = 0, entExc = 0, entFull = 0, entWithProg = 0;
+  for (const id of new Set([...progEntById.keys(), ...delById.keys()])) {
+    const p = progEntById.get(id) ?? 0, d = delById.get(id) ?? 0;
+    entTot += d; entCapped += Math.min(d, p); entFalt += Math.max(p - d, 0); entExc += Math.max(d - p, 0);
+    if (p > 0) { entWithProg++; if (d >= p) entFull++; }
   }
-
-  // ── Multivac (captura por hora vs programa de empaque) ──
+  const hasDeliv = deliv.length > 0;
+  // Multivac
   const mvReal: Record<number, number | null> = {};
   for (const id of MULTIVAC_IDS) {
     const rows = hourly.filter((h) => Number(h.article_id) === id);
@@ -77,26 +83,38 @@ export async function loadTablero(db: Db, day: string, days: string[]): Promise<
   const mvRealSum = mvDone.reduce((a, id) => a + (mvReal[id] as number), 0);
   // Solo se compara contra el programa de los productos ya capturados.
   const mvRatio = mvDone.length ? ratio(mvRealSum, mvDone.reduce((a, id) => a + (progMv[id] ?? 0), 0)) : null;
-  const mvCard: CardData = { title: "Multivac", big: pct(mvRatio), bigLabel: "Cumplimiento", st: sem(mvRatio), tab: "ter",
-    lines: MULTIVAC_IDS.map((id) => ({ a: MULTIVAC_NAMES[id], b: mvReal[id] != null ? pct(ratio(mvReal[id] as number, progMv[id] ?? 0)) : "Sin captura" })),
-    foot: mvProg ? `Programa ${n0(mvProg)}${mvDone.length ? ` · logrado ${n0(mvRealSum)}` : ""}` : "Sin programa de empaque" };
-
-  // ── máquinas por batch ──
-  const rowsOf = (m: string): Row[] => {
-    const rows = emptyRows();
-    for (const r of batch.filter((b) => b.machine === m)) {
-      const i = Number(r.batch_no) - 1;
-      if (i >= 0 && i < rows.length) rows[i] = { real: r.real ?? "", paro: r.downtime_min?.toString() ?? "", kg: r.kg_melted?.toString() ?? "", peso: r.piece_kg?.toString() ?? "", pzs: r.pieces?.toString() ?? "", mer: r.merma_kg?.toString() ?? "" };
-    }
-    return rows;
+  // máquinas por batch
+  const machines = {} as Record<"Tecnovac" | "Termo MK" | "Embolsado" | "Polar", { c: ReturnType<typeof compute>; prog: { qty: number; n: number }; ratio: number | null; hasRows: boolean }>;
+  for (const m of ["Tecnovac", "Termo MK", "Embolsado", "Polar"] as const) {
+    const c = compute(m, rowsOf(batch, m), { ...cfg.batch[m], tolerance: cfg.tolerance });
+    const prog = progByProc[m] ?? { qty: 0, n: 0 };
+    machines[m] = { c, prog, ratio: c.raw.sPz > 0 ? ratio(c.raw.sPz, prog.qty) : null, hasRows: batch.some((b) => b.machine === m) };
+  }
+  return {
+    progByProc, progMv, progEnt, progEntById, delById, hasDeliv,
+    ent: { tot: entTot, capped: entCapped, falt: entFalt, exc: entExc, full: entFull, withProg: entWithProg, fill: ratio(entCapped, progEnt), vol: ratio(entTot, progEnt) },
+    mvReal, mvProg, mvDone, mvRealSum, mvRatio, machines,
   };
-  const machineCalc = (m: "Tecnovac" | "Termo MK" | "Embolsado" | "Polar") =>
-    compute(m, rowsOf(m), { ...cfg.batch[m], tolerance: cfg.tolerance });
+}
 
-  const tc = machineCalc("Tecnovac"), tr = tc.raw;
-  const pedido = progByProc["Tecnovac"]?.qty ?? 0;
-  const tRatio = tr.sPz > 0 ? ratio(tr.sPz, pedido) : null;
-  const tecnoCard: CardData = { title: "Tecnovac", big: pct(tRatio), bigLabel: "Cumplimiento", st: sem(tRatio), tab: "mol",
+export async function loadTablero(db: Db, day: string, days: string[]): Promise<TableroData> {
+  const cfg = await loadConfig(db);
+  const S = summarizeDay((await loadRaw(db, [day]))[day], cfg);
+
+  const entCard: CardData = S.hasDeliv
+    ? { title: "Entregas de PT", big: pct(S.ent.fill), bigLabel: "Fill rate", st: sem(S.ent.fill), tab: "ent",
+        lines: [{ a: "Cumplimiento en volumen", b: pct(S.ent.vol) }, { a: "SKUs completos", b: `${S.ent.full} de ${S.ent.withProg}` },
+                { a: "Piezas faltantes", b: n0(S.ent.falt) }, { a: "Piezas excedentes", b: n0(S.ent.exc) }],
+        foot: `Programadas ${n0(S.progEnt)} · entregadas ${n0(S.ent.tot)}` }
+    : { title: "Entregas de PT", big: "—", bigLabel: "Fill rate", st: N, tab: "ent",
+        lines: [{ a: "Sin registro de entregas", b: "" }], foot: S.progEnt ? `Programadas ${n0(S.progEnt)}` : "" };
+
+  const mvCard: CardData = { title: "Multivac", big: pct(S.mvRatio), bigLabel: "Cumplimiento", st: sem(S.mvRatio), tab: "ter",
+    lines: MULTIVAC_IDS.map((id) => ({ a: MULTIVAC_NAMES[id], b: S.mvReal[id] != null ? pct(ratio(S.mvReal[id] as number, S.progMv[id] ?? 0)) : "Sin captura" })),
+    foot: S.mvProg ? `Programa ${n0(S.mvProg)}${S.mvDone.length ? ` · logrado ${n0(S.mvRealSum)}` : ""}` : "Sin programa de empaque" };
+
+  const t = S.machines.Tecnovac, tr = t.c.raw, pedido = t.prog.qty;
+  const tecnoCard: CardData = { title: "Tecnovac", big: pct(t.ratio), bigLabel: "Cumplimiento", st: sem(t.ratio), tab: "mol",
     lines: tr.sKg > 0
       ? [{ a: "Batches a tiempo", b: tr.nTimed ? `${pct(tr.onT / tr.nTimed)} (${tr.onT} de ${tr.nTimed})` : "—" }, { a: "Rendimiento", b: pct(tr.sTm / tr.sKg) },
          { a: "Desecho", b: pct(tr.sDes / tr.sKg) },
@@ -105,21 +123,18 @@ export async function loadTablero(db: Db, day: string, days: string[]): Promise<
     foot: pedido ? `Pedido ${n0(pedido)}${tr.sPz ? ` · empacado ${n0(tr.sPz)}` : ""}` : "Sin programa de empaque" };
 
   const others: CardData[] = MAQ.map(({ name, tab }) => {
-    const c = machineCalc(name), pp = progByProc[name] ?? { qty: 0, n: 0 };
-    const ratioM = c.raw.sPz > 0 ? ratio(c.raw.sPz, pp.qty) : null;
-    return { title: name, big: pct(ratioM), bigLabel: "Cumplimiento", st: sem(ratioM), tab,
-      lines: [{ a: "Programa de empaque", b: n0(pp.qty) + " pzs." }, { a: "Artículos con programa", b: String(pp.n) },
-              { a: "Empacado", b: c.raw.sPz > 0 ? n0(c.raw.sPz) + " pzs." : "Sin captura" }], foot: "" };
+    const m = S.machines[name];
+    return { title: name, big: pct(m.ratio), bigLabel: "Cumplimiento", st: sem(m.ratio), tab,
+      lines: [{ a: "Programa de empaque", b: n0(m.prog.qty) + " pzs." }, { a: "Artículos con programa", b: String(m.prog.n) },
+              { a: "Empacado", b: m.c.raw.sPz > 0 ? n0(m.c.raw.sPz) + " pzs." : "Sin captura" }], foot: "" };
   });
 
-  const cards = [entCard, mvCard, tecnoCard, ...others];
   const part = (name: string, v: number | null) => (v == null ? `${name} sin captura` : `${name} ${pct(v)}`);
-  const headline = [part("Multivac", mvRatio), deliv.length ? `entregas ${entCard.big} fill rate` : "sin registro de entregas", part("Tecnovac", tRatio)].join(" · ");
-
-  return { day, days, headline, cards, month: await monthToDate(db, day, cfg) };
+  const headline = [part("Multivac", S.mvRatio), S.hasDeliv ? `entregas ${entCard.big} fill rate` : "sin registro de entregas", part("Tecnovac", t.ratio)].join(" · ");
+  return { day, days, headline, cards: [entCard, mvCard, tecnoCard, ...others], month: await monthToDate(db, day) };
 }
 
-async function monthToDate(db: Db, day: string, _cfg: Config): Promise<{ a: string; b: string }[]> {
+async function monthToDate(db: Db, day: string): Promise<{ a: string; b: string }[]> {
   const mv = MULTIVAC_IDS as readonly number[];
   const [del, mvr] = await Promise.all([
     db`with m as (select date_trunc('month', ${day}::date)::date as d0),
@@ -145,4 +160,3 @@ async function monthToDate(db: Db, day: string, _cfg: Config): Promise<{ a: stri
     { a: "Piezas entregadas", b: prog ? `${n0(ent)} de ${n0(prog)}` : "—" },
   ];
 }
-export { emptyHRows, computeHourly };
