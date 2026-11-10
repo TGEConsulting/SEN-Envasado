@@ -102,8 +102,8 @@ create table if not exists activation_codes (
   attempts   integer not null default 0
 );
 
--- Primer administrador (se activa con el flujo de invitación).
-insert into users (email, role, status) values ('etorres@lacteoslaquinta.com.mx','Administrador','invitado') on conflict (email) do nothing;
+-- El primer Administrador se crea una sola vez a mano (no se siembra aquí para no repetirlo en cada build):
+--   insert into users (email, role) values ('correo@dominio', 'Administrador');
 
 -- Captura por máquina: merma por batch y estado de la hoja (borrador / firmada).
 alter table batch_records add column if not exists merma_kg numeric(10,2);
