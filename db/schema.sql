@@ -122,3 +122,23 @@ create table if not exists settings (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Modelo del libro «Programa de empaque y entregas»: datos por artículo y real por día.
+alter table articles add column if not exists pesaje numeric(8,3);   -- kg por pieza (PESAJE)
+alter table articles add column if not exists formula text;          -- origen (QRO, MERIDA, MX, ART, ECO, 3B)
+alter table articles add column if not exists short_name text;       -- descripción corta de las gráficas
+-- TOTAL EMPAQUE (real de empaque por artículo y día). El real de entregas CR100 vive en `deliveries`.
+create table if not exists packed (
+  day        date    not null,
+  article_id integer not null references articles(id),
+  qty        integer not null check (qty >= 0),
+  primary key (day, article_id)
+);
+-- INVENTARIO por artículo y día (el resumen toma el último valor capturado hasta el corte).
+create table if not exists inventory (
+  day        date    not null,
+  article_id integer not null references articles(id),
+  qty        integer not null,
+  primary key (day, article_id)
+);
+alter table articles add column if not exists ord integer;           -- orden del catálogo en el libro

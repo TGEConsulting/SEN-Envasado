@@ -19,7 +19,7 @@ export async function loadFocos(db: Db, day: string): Promise<Focos> {
   // Entregas de PT
   if (S.hasDeliv) {
     const e = S.ent;
-    if (e.fill != null && e.fill < 0.98) {
+    if (e.vol != null && e.vol < 0.98) {
       const arts = await db`select id, description from articles`;
       const desc = new Map(arts.map((a) => [Number(a.id), String(a.description)]));
       const withFalt = [...new Set([...S.progEntById.keys(), ...S.delById.keys()])]
@@ -27,10 +27,10 @@ export async function loadFocos(db: Db, day: string): Promise<Focos> {
         .filter((x) => x.falt > 0).sort((a, b) => b.falt - a.falt);
       const short3 = withFalt.slice(0, 3);
       const share = e.falt > 0 ? short3.reduce((a, x) => a + x.falt, 0) / e.falt : 0;
-      out.push({ st: sem(e.fill), tag: "Entregas PT", h: `Fill rate ${pct(e.fill)}`,
+      out.push({ st: sem(e.vol), tag: "Entregas CR100", h: `Cumplimiento ${pct(e.vol)}`,
         m: `Faltan ${n0(e.falt)} pzs (${e.full} de ${e.withProg} SKUs completos).` + (short3.length ? ` ${withFalt.length > 3 && share >= 0.6 ? `Tres SKUs explican el ${Math.round(share * 100)}%` : withFalt.length > 3 ? "Mayor faltante" : `Faltante en ${withFalt.length} SKU${withFalt.length === 1 ? "" : "s"}`}: ` + short3.map((x) => `${x.id} ${short(desc.get(x.id) ?? "")} (−${n0(x.falt)})`.replace(/\s+\(/, " (")).join(", ") + "." : "") });
     }
-  } else if (S.progEnt > 0) out.push({ st: N, tag: "Entregas PT", h: "Sin registro de entregas", m: `Hay programa de ${n0(S.progEnt)} pzs, pero no se ha capturado lo entregado.` });
+  } else if (S.progEnt > 0) out.push({ st: N, tag: "Entregas CR100", h: "Sin registro de entregas", m: `Hay programa de ${n0(S.progEnt)} pzs, pero no se ha capturado lo entregado.` });
 
   // Multivac
   for (const id of MULTIVAC_IDS) {
@@ -44,7 +44,7 @@ export async function loadFocos(db: Db, day: string): Promise<Focos> {
     const mm = S.machines[m];
     if (!mm.hasRows) { if (mm.prog.qty > 0) sinCaptura.push(m); continue; }
     const r = mm.ratio;
-    if (r != null && r < 0.98) out.push({ st: sem(r), tag: m, h: `Cumplimiento ${pct(r)}`, m: `${n0(mm.c.raw.sPz)} de ${n0(mm.prog.qty)} pzs del programa.` });
+    if (r != null && r < 0.98) out.push({ st: sem(r), tag: m, h: `Cumplimiento ${pct(r)}`, m: `${n0(mm.real ?? 0)} de ${n0(mm.prog.qty)} pzs del programa.` });
     const x = mm.c.raw;
     if (x.nTimed >= 3 && x.onT / x.nTimed < 0.5) out.push({ st: A, tag: m, h: `Solo ${x.onT} de ${x.nTimed} batches a tiempo`, m: `Tolerancia de ${cfg.tolerance} min.` });
     if (x.sPar > 60) out.push({ st: A, tag: m, h: `Paro por mantenimiento de ${x.sPar} min`, m: "Acumulado de la jornada." });
@@ -61,7 +61,7 @@ export async function loadFocos(db: Db, day: string): Promise<Focos> {
   const headline = !hasData ? "Aún no hay captura ni entregas para esta jornada"
     : nR + nA === 0 ? "Sin focos rojos ni amarillos en la jornada"
     : `${nR} foco${nR === 1 ? "" : "s"} rojo${nR === 1 ? "" : "s"} y ${nA} amarillo${nA === 1 ? "" : "s"}: ${out.find((a) => a.st === R || a.st === A)!.tag} — ${out.find((a) => a.st === R || a.st === A)!.h.toLowerCase()}`;
-  const checks = out.filter((a) => a.st === R || a.st === A).slice(0, 4).map((a) => (a.tag === "Entregas PT" ? "Confirmar lo entregado de los SKUs con faltante" : `${a.tag}: ${a.h.charAt(0).toLowerCase() + a.h.slice(1)}, ¿causa y acción?`));
+  const checks = out.filter((a) => a.st === R || a.st === A).slice(0, 4).map((a) => (a.tag === "Entregas CR100" ? "Confirmar lo entregado de los SKUs con faltante" : `${a.tag}: ${a.h.charAt(0).toLowerCase() + a.h.slice(1)}, ¿causa y acción?`));
   if (!checks.length) checks.push("Sin pendientes por revisar");
   return { day, headline, alerts: out.slice(0, 14), checks };
 }

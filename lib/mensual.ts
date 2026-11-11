@@ -19,10 +19,10 @@ export async function loadMensual(db: Db, day: string, days: string[]): Promise<
 
   // Entregas (días con entregas capturadas)
   const E = S.filter((s) => s.hasDeliv);
-  const eProg = E.reduce((a, s) => a + s.progEnt, 0), eTot = E.reduce((a, s) => a + s.ent.tot, 0), eCap = E.reduce((a, s) => a + s.ent.capped, 0);
+  const eProg = E.reduce((a, s) => a + s.progEnt, 0), eTot = E.reduce((a, s) => a + s.ent.tot, 0);
   const ent = E.length
-    ? card("Entregas de PT", "ent", ratio(eCap, eProg), "Fill rate", [{ a: "Cumplimiento en volumen", b: pct(ratio(eTot, eProg)) }, { a: "Piezas faltantes", b: n0(E.reduce((a, s) => a + s.ent.falt, 0)) }, { a: "Piezas excedentes", b: n0(E.reduce((a, s) => a + s.ent.exc, 0)) }], `Programadas ${n0(eProg)} · entregadas ${n0(eTot)} · ${E.length} jornada${E.length === 1 ? "" : "s"}`)
-    : card("Entregas de PT", "ent", null, "Fill rate", [{ a: "Sin registro de entregas en el mes", b: "" }], "");
+    ? card("Entregas CR100", "ent", ratio(eTot, eProg), "Cumplimiento", [{ a: "Programa", b: n0(eProg) + " pzs." }, { a: "Real", b: n0(eTot) + " pzs." }, { a: "Faltante · excedente", b: `${n0(E.reduce((a, s) => a + s.ent.falt, 0))} · ${n0(E.reduce((a, s) => a + s.ent.exc, 0))}` }], `Real ÷ programa · ${E.length} jornada${E.length === 1 ? "" : "s"} con captura`)
+    : card("Entregas CR100", "ent", null, "Cumplimiento", [{ a: "Sin registro de entregas en el mes", b: "" }], "");
 
   // Multivac (producto-día con captura)
   const per = MULTIVAC_IDS.map((id) => { const d = S.filter((s) => s.mvReal[id] != null); return { id, real: d.reduce((a, s) => a + (s.mvReal[id] as number), 0), prog: d.reduce((a, s) => a + (s.progMv[id] ?? 0), 0), n: d.length }; });
@@ -44,13 +44,13 @@ export async function loadMensual(db: Db, day: string, days: string[]): Promise<
     : card("Tecnovac", "mol", null, "Cumplimiento", [{ a: "Sin captura en el mes", b: "" }], "");
 
   const others = (["Termo MK", "Embolsado", "Polar"] as const).map((m, i) => {
-    const D = S.filter((s) => s.machines[m].hasRows), pz = D.reduce((a, s) => a + s.machines[m].c.raw.sPz, 0), pr = D.reduce((a, s) => a + s.machines[m].prog.qty, 0);
+    const D = S.filter((s) => s.machines[m].real != null), pz = D.reduce((a, s) => a + (s.machines[m].real ?? 0), 0), pr = D.reduce((a, s) => a + s.machines[m].prog.qty, 0);
     return card(m, (["mk", "embo", "vac"] as const)[i], D.length && pz > 0 ? ratio(pz, pr) : null, "Cumplimiento",
       [{ a: "Programa de empaque", b: n0(pr) + " pzs." }, { a: "Empacado", b: pz > 0 ? n0(pz) + " pzs." : "Sin captura" }, { a: "Jornadas con registro", b: String(D.length) }], "");
   });
 
   const t = await loadTendencia(db, day, days);
-  const trend = t.rows.filter((r) => r.label === "Fill rate" || (r.group === "Multivac" && r.label === "Total") || (r.group === "Tecnovac" && r.label === "Cumplimiento"));
+  const trend = t.rows.filter((r) => (r.group === "Entregas CR100" && r.label === "Cumplimiento") || (r.group === "Empaque" && r.label === "Cumplimiento") || (r.group === "Multivac" && r.label === "Total") || (r.group === "Tecnovac" && r.label === "Cumplimiento"));
   return {
     day, title: monthLabel(day), range: `1 al ${Number(day.slice(8))}`, cards: [ent, mv, tec, ...others], trend, labels: t.labels,
     note: "Entregas y Multivac muestran el acumulado del mes sobre las jornadas con registro. Tecnovac y las demás máquinas se calculan sobre sus jornadas con captura.",

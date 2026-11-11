@@ -56,7 +56,7 @@ export async function loadDetalle(db: Db, tab: string, day: string, days: string
       .map((p) => ({ id: Number(p.article_id), name: String(p.description).trim(), p: n0(Number(p.qty)) })).sort((a, b) => a.id - b.id);
     return {
       kind: "batch", day, title: m, noData: !mm.hasRows,
-      sub: mm.prog.qty ? `${m === "Tecnovac" ? "Pedido" : "Programa"} ${n0(mm.prog.qty)}${c.raw.sPz ? ` · empacado ${n0(c.raw.sPz)}` : ""}` : "Sin programa de empaque",
+      sub: mm.prog.qty ? `${m === "Tecnovac" ? "Pedido" : "Programa"} ${n0(mm.prog.qty)}${mm.real != null ? ` · real ${n0(mm.real)}` : ""}` : "Sin programa de empaque",
       kpis: c.kpis, sparkTitle: "Cumplimiento de los últimos días", spark: spark(all, day, all.map((d) => sum[d].machines[m].ratio)),
       batch: {
         delays: c.calc.filter((x) => x.retN != null).map((x) => ({ n: x.n, txt: ((x.retN as number) > 0 ? "+" : "") + Math.round(x.retN as number), h: Math.max(4, Math.round(Math.min(Math.abs(x.retN as number), 100) / 100 * 120)), c: delaySem(x.retN as number, tol).c })),
@@ -95,9 +95,9 @@ export async function loadDetalle(db: Db, tab: string, day: string, days: string
   return {
     kind: "ent", day, title: "Entregas de PT", noData: !S.hasDeliv,
     sub: S.progEnt ? `Programadas ${n0(S.progEnt)}${S.hasDeliv ? ` · entregadas ${n0(e.tot)}` : ""}` : "Sin programa de entregas",
-    kpis: S.hasDeliv ? [kpi("Fill rate", pct(e.fill), "Entregado hasta lo programado", sem(e.fill).c), kpi("Volumen", pct(e.vol), `${n0(e.tot)} de ${n0(S.progEnt)} pzs.`),
-      kpi("SKUs completos", `${e.full} de ${e.withProg}`, "Con programa"), kpi("Faltante", n0(e.falt), "pzs."), kpi("Excedente", n0(e.exc), "pzs.")] : [],
-    sparkTitle: "Fill rate de los últimos días", spark: spark(all, day, all.map((d) => (sum[d].hasDeliv ? sum[d].ent.fill : null))),
+    kpis: S.hasDeliv ? [kpi("Cumplimiento", pct(e.vol), "Real ÷ programa", sem(e.vol).c), kpi("Real", n0(e.tot), `de ${n0(S.progEnt)} pzs. programadas`), kpi("Kilos", n0(S.kgG), "piezas × pesaje"),
+      kpi("SKUs completos", `${e.full} de ${e.withProg}`, "Con programa"), kpi("Faltante · excedente", `${n0(e.falt)} · ${n0(e.exc)}`, "pzs.")] : [],
+    sparkTitle: "Cumplimiento de los últimos días", spark: spark(all, day, all.map((d) => (sum[d].hasDeliv ? sum[d].ent.vol : null))),
     ent: { rows: ids.map((id) => { const p = S.progEntById.get(id) ?? 0, d = S.delById.get(id) ?? 0, r = p > 0 ? d / p : null, a = info.get(id);
       return { sku: id, name: String(a?.description ?? id).trim(), proc: String(a?.process ?? "—"), p: n0(p), e: S.delById.has(id) ? n0(d) : "—", f: n0(Math.max(p - d, 0)), pct: pct(r), st: S.hasDeliv ? sem(r) : N }; }) },
   };

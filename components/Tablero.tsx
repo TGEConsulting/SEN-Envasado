@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { A, G, R, dayLong, monthStartLabel, type TabId } from "@/lib/domain";
+import { A, G, R, dayLong, type TabId } from "@/lib/domain";
 import type { TableroData } from "@/lib/tablero";
 import TableroMensual from "./TableroMensual";
 import Dashboard from "./Dashboard";
@@ -48,7 +48,7 @@ export default function Tablero({ day, mode, onMode, canOpen, onOpen }: { day: s
 
       <div className="grid-auto">
         {data.cards.map((c) => {
-          const open = canOpen(c.tab as TabId);
+          const open = !!c.tab && canOpen(c.tab as TabId);
           return (
             <div key={c.title} className="blueprint" role={open ? "button" : undefined} tabIndex={open ? 0 : undefined}
               onClick={open ? () => onOpen(c.tab as TabId) : undefined}
@@ -79,7 +79,7 @@ export default function Tablero({ day, mode, onMode, canOpen, onOpen }: { day: s
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", border: "1px solid var(--color-divider)" }}>
         <div style={{ padding: "12px 16px", fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 19, color: "#0d4884", display: "flex", alignItems: "center" }}>
-          Mes a la fecha · {monthStartLabel(data.day)}–{data.day.slice(8)}
+          Acumulado al corte
         </div>
         {data.month.map((m) => (
           <div key={m.a} style={{ padding: "12px 16px", borderLeft: "1px solid var(--color-divider)" }}>
