@@ -1,24 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  DAYS, DAY_LABEL, MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL,
-  type Day, type Role, type TabId,
+  MACHINE_TABS, ROLES, ROLE_LABEL, TAB_LABEL, dayChip,
+  type Role, type TabId,
 } from "@/lib/domain";
-import Tablero from "./Tablero";
+import Tablero, { type Mode } from "./Tablero";
+import Detalle from "./Detalle";
+import Users from "./Users";
+import Captura from "./Captura";
+import Datos from "./Datos";
+import Configuracion from "./Configuracion";
+import Bitacora from "./Bitacora";
+import Reportes from "./Reportes";
+import Focos from "./Focos";
+import Tendencia from "./Tendencia";
 
-const ROLE_OPTIONS: [Role, string][] = [
-  ["Dirección", "Dirección"], ["Gerencia", "Gerencia de producción"], ["Planeador", "Planeador"],
-  ["Administrador", "Administrador"], ["Supervisor", "Supervisor / líder de grupo"], ["Operador", "Operador capturista"],
-];
 const ORDER = ["tablero", "focos", "tend", "env", "ent", "cap", "datos", "rep", "bit", "config", "users"] as const;
 const GROUP: Record<string, number> = { tablero: 1, focos: 1, tend: 1, env: 2, ent: 2, cap: 3, datos: 3, rep: 3, bit: 3, config: 3, users: 3 };
 
-export default function Shell() {
-  const [role, setRole] = useState<Role>("Gerencia");
+export default function Shell({ role, meId }: { role: Role; meId: number }) {
   const [tabState, setTab] = useState<TabId>("tablero");
-  const [day, setDay] = useState<Day>(16);
+  const [day, setDay] = useState<string | null>(null);
+  const [days, setDays] = useState<string[]>([]);
+  const [mode, setMode] = useState<Mode>("dia");
+  useEffect(() => {
+    fetch("/api/days").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) { setDays(j.days); setDay(j.days[j.days.length - 1]); } });
+  }, []);
+
+  const signOut = async () => { await fetch("/api/auth/signout", { method: "POST" }); window.location.href = "/"; };
 
   const allowed = ROLES[role];
   const tab = allowed.includes(tabState) ? tabState : allowed[0];
@@ -28,20 +38,12 @@ export default function Shell() {
   const goPrim = (t: string) => setTab(t === "env" ? (envAllowed.includes(tab) ? tab : envAllowed[0]) : (t as TabId));
   const labelOf = (t: string) =>
     t === "env" ? "Envasado" : t === "datos" && role === "Supervisor" ? "Entregas" : TAB_LABEL[t as TabId];
-  const showDays = tab === "tablero";
+  const DETAIL = ["ent", ...MACHINE_TABS] as TabId[];
+  const isDetail = DETAIL.includes(tab);
+  const showDays = (tab === "tablero" && mode === "dia") || isDetail || tab === "rep" || tab === "focos" || tab === "tend";
 
   return (
     <div style={{ minHeight: "100vh", padding: "16px 16px 48px" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, fontSize: 13 }} className="muted">
-        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 15, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--color-text)" }}>Prototipo</span>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          Rol
-          <select className="input" style={{ width: "auto", minWidth: 210 }} value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {ROLE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-      </div>
-
       <div className="blueprint" style={{ maxWidth: 1280, margin: "0 auto", overflow: "hidden", borderRadius: 18 }}>
         <div className="stripe" style={{ margin: "-2px -2px 0" }} />
 
@@ -53,16 +55,16 @@ export default function Shell() {
               <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>Sistema de Envasado</span>
             </span>
             <span className="tag">{ROLE_LABEL[role]}</span>
-            <Link className="btn btn-secondary btn-sm" href="/">Salir</Link>
+            <button className="btn btn-secondary btn-sm" onClick={signOut}>Salir</button>
           </div>
           {showDays && (
             <div style={{ display: "flex", overflowX: "auto", maxWidth: "100%", gap: 6 }}>
-              {DAYS.map((d) => (
+              {days.map((d) => (
                 <button key={d} onClick={() => setDay(d)} aria-pressed={d === day}
                   style={{ cursor: "pointer", font: "inherit", fontSize: 13, flex: "none", whiteSpace: "nowrap", padding: "6px 10px",
                     border: `1px solid ${d === day ? "#0d4884" : "var(--color-divider)"}`,
                     background: d === day ? "#0d4884" : "transparent", color: d === day ? "#fff" : "var(--color-text)" }}>
-                  {DAY_LABEL[d]}
+                  {dayChip(d)}
                 </button>
               ))}
             </div>
@@ -100,7 +102,25 @@ export default function Shell() {
 
         <main style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
           {tab === "tablero" ? (
-            <Tablero day={day} canOpen={(t) => allowed.includes(t)} onOpen={setTab} />
+            day ? <Tablero day={day} mode={mode} onMode={setMode} canOpen={(t) => allowed.includes(t)} onOpen={setTab} /> : <div className="muted">Cargando…</div>
+          ) : isDetail ? (
+            day ? <Detalle key={tab} tab={tab} day={day} /> : <div className="muted">Cargando…</div>
+          ) : tab === "cap" ? (
+            <Captura role={role} />
+          ) : tab === "datos" && ["Gerencia", "Planeador", "Administrador", "Supervisor"].includes(role) ? (
+            <Datos role={role} />
+          ) : tab === "config" && ["Gerencia", "Administrador"].includes(role) ? (
+            <Configuracion />
+          ) : tab === "focos" ? (
+            day ? <Focos day={day} /> : <div className="muted">Cargando…</div>
+          ) : tab === "tend" ? (
+            day ? <Tendencia day={day} /> : <div className="muted">Cargando…</div>
+          ) : tab === "rep" ? (
+            day ? <Reportes day={day} /> : <div className="muted">Cargando…</div>
+          ) : tab === "bit" ? (
+            <Bitacora />
+          ) : tab === "users" ? (
+            <Users meId={meId} />
           ) : (
             <div className="blueprint" style={{ padding: 28 }}>
               <div className="kicker">Pendiente</div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pct, sem } from "@/lib/domain";
 
 const FEATURES = [
   ["Captura por máquina", "Tecnovac, Multivac, Termo MK, Embolsado y Polar, con cálculo automático y validaciones."],
@@ -6,11 +7,9 @@ const FEATURES = [
   ["Tablero con semáforo", "Cumplimiento, rendimiento, desecho y retraso por batch, por proceso."],
   ["Bitácora de cambios", "Cada cambio a programas y horarios queda con usuario, fecha y motivo."],
 ];
-const SAMPLE = [
-  ["Multivac", "103.3%", "Verde", "#5aa31a"],
-  ["Tecnovac", "97.2%", "Verde", "#5aa31a"],
-  ["Entregas PT", "89.1%", "Amarillo", "#f2a900"],
-];
+const SAMPLE = ([["Multivac", 1.033], ["Tecnovac", 0.972], ["Entregas PT", 0.891]] as const).map(
+  ([n, v]) => [n, pct(v), sem(v).l, sem(v).c] as const,
+);
 
 export default function Landing() {
   return (
@@ -22,7 +21,7 @@ export default function Landing() {
             <img src="/logo-color.png" alt="La Quinta" style={{ height: 56, width: "auto" }} />
             <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 30, color: "#0d4884" }}>SEN</span>
           </div>
-          <Link className="btn btn-primary" href="/app">Ingresar</Link>
+          <Link className="btn btn-primary" href="/login">Ingresar</Link>
         </header>
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))", gap: 28, alignItems: "center", padding: "0 28px 28px" }}>
@@ -34,7 +33,7 @@ export default function Landing() {
             <p style={{ margin: 0, fontSize: 17, color: "var(--color-neutral-800)", maxWidth: 520 }}>
               Captura el empaque de cada máquina, compáralo con el programa y entérate al momento de lo que se está quedando atrás.
             </p>
-            <div><Link className="btn btn-primary" href="/app">Ingresar con mi correo</Link></div>
+            <div><Link className="btn btn-primary" href="/login">Ingresar con mi correo</Link></div>
             <div style={{ fontSize: 13 }} className="muted">El acceso es solo por invitación.</div>
           </div>
           <div style={{ border: "2px solid #0d4884", borderRadius: 16, padding: 16, background: "#f6faff", display: "flex", flexDirection: "column", gap: 12 }}>

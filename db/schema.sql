@@ -93,3 +93,32 @@ create table if not exists audit_log (
   new_value  text,
   reason     text not null
 );
+
+-- Códigos de activación de invitaciones (6 dígitos, 15 min, máx. 5 intentos).
+create table if not exists activation_codes (
+  email      text primary key,
+  code_hash  text not null,
+  expires_at timestamptz not null,
+  attempts   integer not null default 0
+);
+
+-- El primer Administrador se crea una sola vez a mano (no se siembra aquí para no repetirlo en cada build):
+--   insert into users (email, role) values ('correo@dominio', 'Administrador');
+
+-- Captura por máquina: merma por batch y estado de la hoja (borrador / firmada).
+alter table batch_records add column if not exists merma_kg numeric(10,2);
+alter table shift_sheets add column if not exists updated_at timestamptz not null default now();
+
+-- Artículos de Multivac (captura por hora y producto).
+insert into articles (id, description, process) values
+  (2135, 'QUESO OAXACA 3B VACA BLANCA 400G', 'Multivac'),
+  (1065, 'QUESO PANELA Q VACA BLANCA 300G TERMO', 'Multivac'),
+  (1073, 'QUESO FRESCO RANCHERO VACA BLANCA DE 220 GRAMOS TERMO FORMADO SEMIRRIGIDO', 'Multivac')
+on conflict (id) do nothing;
+
+-- Configuración de la operación (horas esperadas, metas, peso objetivo, tolerancia): un documento versionado en la bitácora.
+create table if not exists settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);

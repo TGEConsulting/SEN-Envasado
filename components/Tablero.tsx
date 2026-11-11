@@ -1,60 +1,58 @@
-import { DAY_DATA, DAY_LABEL, MONTH_TO_DATE, MULTIVAC_PRODUCTS, A, G, R, n0, pct, sem, type Day, type TabId } from "@/lib/domain";
+"use client";
 
-type Card = { title: string; big: string; bigLabel: string; st: ReturnType<typeof sem>; tab: TabId; lines: { a: string; b: string }[]; foot: string };
+import { useEffect, useState } from "react";
+import { A, G, R, dayLong, monthStartLabel, type TabId } from "@/lib/domain";
+import type { TableroData } from "@/lib/tablero";
+import TableroMensual from "./TableroMensual";
+import Dashboard from "./Dashboard";
 
-function cardsFor(day: Day): Card[] {
-  const d = DAY_DATA[day], e = d.ent, m = d.mol, is16 = day === 16;
-  return [
-    {
-      title: "Entregas de PT", big: e ? pct(e.f) : "—", bigLabel: "Fill rate", st: sem(e?.f), tab: "ent",
-      lines: e
-        ? [{ a: "Cumplimiento en volumen", b: pct(e.v) }, { a: "SKUs completos", b: is16 ? "13 de 23" : pct(e.s) },
-           { a: "Piezas faltantes", b: is16 ? "10,153" : "—" }, { a: "Piezas excedentes", b: is16 ? "4,144" : "—" }]
-        : [{ a: "Sin registro de entregas", b: "" }],
-      foot: e ? `Programadas ${n0(e.prog)} · entregadas ${n0(e.ent)}` : "",
-    },
-    {
-      title: "Multivac", big: pct(d.ter[3]), bigLabel: "Cumplimiento", st: sem(d.ter[3]), tab: "ter",
-      lines: MULTIVAC_PRODUCTS.map((x, i) => ({ a: x, b: pct(d.ter[i]) })),
-      foot: is16 ? "Programa 54,904 · logrado 56,729" : "",
-    },
-    {
-      title: "Tecnovac", big: m ? pct(m.c) : "—", bigLabel: "Cumplimiento", st: sem(m?.c), tab: "mol",
-      lines: m
-        ? [{ a: "Batches a tiempo", b: is16 ? "25% (3 de 12)" : pct(m.t) }, { a: "Rendimiento", b: pct(m.r) },
-           { a: "Desecho", b: pct(m.d) }, { a: "Sobrepeso vs 250 g", b: "+" + (m.s * 100).toFixed(1) + "%" }]
-        : [{ a: "Sin registro", b: "" }],
-      foot: m ? (is16 ? "Pedido 13,800 · empacado 13,410 · Grupo 2" : `Empacado ${n0(m.p)} · ${m.g}`) : "",
-    },
-    ...(["Termo MK", "Embolsado", "Polar"] as const).map((title, i): Card => ({
-      title, big: "—", bigLabel: "Cumplimiento", st: sem(null), tab: (["mk", "embo", "vac"] as const)[i],
-      lines: [{ a: "Programa de empaque", b: "—" }, { a: "Empacado", b: "Sin captura" }], foot: "",
-    })),
-  ];
-}
+export type Mode = "dia" | "mes" | "dash";
 
-function headline(day: Day) {
-  const d = DAY_DATA[day];
-  if (day === 16) return "Multivac y Tecnovac cerca del programa; entregas de PT con faltante concentrado en un SKU";
-  return `Multivac ${pct(d.ter[3])}` + (d.ent ? ` · entregas ${pct(d.ent.f)} fill rate` : " · sin registro de entregas") + (d.mol ? ` · Tecnovac ${pct(d.mol.c)}` : "");
-}
+export default function Tablero({ day, mode, onMode, canOpen, onOpen }: { day: string; mode: Mode; onMode: (m: Mode) => void; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void }) {
+  const [data, setData] = useState<TableroData | null>(null);
+  const [err, setErr] = useState("");
 
-export default function Tablero({ day, canOpen, onOpen }: { day: Day; canOpen: (t: TabId) => boolean; onOpen: (t: TabId) => void }) {
-  const label = DAY_LABEL[day] + "/oct";
+  useEffect(() => {
+    if (mode !== "dia") return;
+    let off = false;
+    (async () => {
+      const r = await fetch(`/api/tablero?day=${day}`);
+      if (off) return;
+      if (!r.ok) return setErr("No se pudo cargar el tablero.");
+      const j: TableroData = await r.json();
+      setErr(""); setData(j);
+    })();
+    return () => { off = true; };
+  }, [day, mode]);
+
+  const toggle = (
+    <div className="seg no-print" style={{ alignSelf: "flex-start" }}>
+      {([["dia", "Tablero del día"], ["mes", "Tablero mensual"], ["dash", "Dashboard"]] as [Mode, string][]).map(([m, t]) => (
+        <label key={m} className="seg-opt"><input type="radio" name="tmode" checked={mode === m} onChange={() => onMode(m)} />{t}</label>
+      ))}
+    </div>
+  );
+  if (mode === "mes") return <>{toggle}<TableroMensual day={day} /></>;
+  if (mode === "dash") return <>{toggle}<Dashboard day={day} /></>;
+
+  if (err) return <div role="alert" style={{ padding: 12, borderRadius: 10, background: "#fde3e8", color: "#9a0022" }}>{err}</div>;
+  if (!data) return <div className="muted">Cargando tablero…</div>;
+
   return (
     <>
+      {toggle}
       <div>
-        <div className="kicker">Jornada {label}</div>
-        <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05, maxWidth: 900, textWrap: "pretty" }}>{headline(day)}</h1>
+        <div className="kicker">Jornada {dayLong(data.day)}</div>
+        <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05, maxWidth: 900, textWrap: "pretty" }}>{data.headline}</h1>
       </div>
 
       <div className="grid-auto">
-        {cardsFor(day).map((c) => {
-          const open = canOpen(c.tab);
+        {data.cards.map((c) => {
+          const open = canOpen(c.tab as TabId);
           return (
             <div key={c.title} className="blueprint" role={open ? "button" : undefined} tabIndex={open ? 0 : undefined}
-              onClick={open ? () => onOpen(c.tab) : undefined}
-              onKeyDown={open ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(c.tab); } } : undefined}
+              onClick={open ? () => onOpen(c.tab as TabId) : undefined}
+              onKeyDown={open ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(c.tab as TabId); } } : undefined}
               style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12, cursor: open ? "pointer" : "default" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span className="card-title">{c.title}</span>
@@ -81,9 +79,9 @@ export default function Tablero({ day, canOpen, onOpen }: { day: Day; canOpen: (
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", border: "1px solid var(--color-divider)" }}>
         <div style={{ padding: "12px 16px", fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 19, color: "#0d4884", display: "flex", alignItems: "center" }}>
-          Mes a la fecha · 1–16 oct
+          Mes a la fecha · {monthStartLabel(data.day)}–{data.day.slice(8)}
         </div>
-        {MONTH_TO_DATE.map((m) => (
+        {data.month.map((m) => (
           <div key={m.a} style={{ padding: "12px 16px", borderLeft: "1px solid var(--color-divider)" }}>
             <div className="muted" style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase" }}>{m.a}</div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26 }}>{m.b}</div>
@@ -93,7 +91,7 @@ export default function Tablero({ day, canOpen, onOpen }: { day: Day; canOpen: (
 
       <div className="muted" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 12, alignItems: "center" }}>
         <span>Semáforo</span>
-        {[[G, "verde ≥ 95%"], [A, "amarillo 85–95%"], [R, "rojo < 85%"]].map(([s, t]) => (
+        {[[G, "verde ≥ 98%"], [A, "amarillo 95–98%"], [R, "rojo < 95%"]].map(([s, t]) => (
           <span key={t as string} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
             <span className="dot" style={{ width: 10, height: 10, background: (s as typeof G).c }} />{t as string}
           </span>

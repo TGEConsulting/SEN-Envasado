@@ -70,3 +70,12 @@ table { font-variant-numeric: tabular-nums; }
 .grid-auto { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* Impresión: solo el reporte */
+@media print {
+  body { background: #fff; }
+  body * { visibility: hidden; }
+  #sen-report, #sen-report * { visibility: visible; }
+  #sen-report { position: absolute; left: 0; top: 0; width: 100%; box-sizing: border-box; border: 0; box-shadow: none; overflow: visible !important; }
+  .no-print { display: none !important; }
+}
