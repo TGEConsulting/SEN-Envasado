@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PROCESSES } from "@/lib/domain";
 import { MULTIVAC_IDS, MULTIVAC_NAMES } from "@/lib/config";
 import { REPORT_LIST, REPORT_MACHINES, type ReportData } from "@/lib/reportes-meta";
 
@@ -13,12 +12,11 @@ export default function Reportes({ day }: { day: string }) {
   const [rep, setRep] = useState<string>("tablero");
   const [machine, setMachine] = useState<string>("Tecnovac");
   const [product, setProduct] = useState<number>(MULTIVAC_IDS[0]);
-  const [process, setProcess] = useState("all");
   const [data, setData] = useState<ReportData | null>(null);
   const [err, setErr] = useState("");
   const [issued, setIssued] = useState("");
 
-  const qs = useMemo(() => new URLSearchParams({ rep, day, machine, product: String(product), process }).toString(), [rep, day, machine, product, process]);
+  const qs = useMemo(() => new URLSearchParams({ rep, day, machine, product: String(product) }).toString(), [rep, day, machine, product]);
 
   useEffect(() => {
     let off = false;
@@ -32,8 +30,8 @@ export default function Reportes({ day }: { day: string }) {
     return () => { off = true; };
   }, [qs]);
 
-  const align = useMemo(() => (data ? data.head.map((_, i) => (data.rows.length > 0 && data.rows.every((r) => r[i] === "" || numeric(r[i])) ? "right" : "left")) : []), [data]);
-  const showProc = rep === "entregas" || rep === "programas";
+  const alignOf = (head: string[], rows: (string | number)[][]) => head.map((_, i) => (rows.length > 0 && rows.every((r) => r[i] === "" || numeric(r[i])) ? "right" : "left") as "left" | "right");
+  const align = useMemo(() => (data ? alignOf(data.head, data.rows) : []), [data]);
 
   return (
     <>
@@ -56,10 +54,6 @@ export default function Reportes({ day }: { day: string }) {
                   <select id="r-prod" className="input" value={product} onChange={(e) => setProduct(Number(e.target.value))}>{MULTIVAC_IDS.map((id) => <option key={id} value={id}>{MULTIVAC_NAMES[id]}</option>)}</select></div>
               )}
             </>
-          )}
-          {showProc && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}><label htmlFor="r-proc" style={lab}>Proceso</label>
-              <select id="r-proc" className="input" value={process} onChange={(e) => setProcess(e.target.value)}><option value="all">Todos</option>{PROCESSES.map((p) => <option key={p}>{p}</option>)}</select></div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button className="btn btn-primary" onClick={() => setTimeout(() => window.print(), 50)} disabled={!data}>Imprimir</button>
@@ -86,6 +80,14 @@ export default function Reportes({ day }: { day: string }) {
               <tbody>{data.rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} style={{ textAlign: align[j] as "left" | "right" }}>{fmt(v)}</td>)}</tr>)}</tbody>
             </table>
             {data.rows.length === 0 && <div className="muted" style={{ padding: "16px 0", fontSize: 14 }}>Sin datos para este reporte.</div>}
+            {(data.sections ?? []).map((sec) => { const al = alignOf(sec.head, sec.rows); return (
+              <div key={sec.title} style={{ marginTop: 22, overflowX: "auto" }}>
+                <div className="card-title" style={{ fontSize: 17, marginBottom: 6 }}>{sec.title}</div>
+                <table className="table" style={{ minWidth: 520, fontSize: 12 }}>
+                  <thead><tr>{sec.head.map((h, i) => <th key={h + i} style={{ textAlign: al[i] }}>{h}</th>)}</tr></thead>
+                  <tbody>{sec.rows.map((r, i) => <tr key={i} style={r[1] === "TOTAL" || String(r[1]).startsWith("TOTAL") ? { fontWeight: 600 } : undefined}>{r.map((v, j) => <td key={j} style={{ textAlign: al[j] }}>{fmt(v)}</td>)}</tr>)}</tbody>
+                </table>
+              </div>); })}
             <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>{data.rows.length} fila(s)</div>
           </>)}
         </div>

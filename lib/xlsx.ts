@@ -17,10 +17,18 @@ export async function buildWorkbook(reports: ReportData[]): Promise<Buffer> {
     r.head.forEach((h, i) => { const c = head.getCell(i + 1); c.value = h; c.font = { bold: true, color: { argb: "FF0D4884" } }; c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F0FA" } }; });
     r.rows.forEach((row) => ws.addRow(row));
     ws.views = [{ state: "frozen", ySplit: 4 }];
-    r.head.forEach((h, i) => {
-      const w = Math.max(h.length, ...r.rows.slice(0, 200).map((row) => String(row[i] ?? "").length));
-      ws.getColumn(i + 1).width = Math.min(Math.max(w + 2, 10), 60);
-    });
+    const widths = r.head.map((h) => h.length);
+    r.rows.slice(0, 200).forEach((row) => row.forEach((v, i) => { widths[i] = Math.max(widths[i] ?? 0, String(v ?? "").length); }));
+    for (const sec of r.sections ?? []) {
+      ws.addRow([]);
+      const t = ws.addRow([sec.title]); t.getCell(1).font = { bold: true, size: 12 };
+      const hr = ws.addRow(sec.head);
+      hr.eachCell((c) => { c.font = { bold: true, color: { argb: "FF0D4884" } }; c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F0FA" } }; });
+      sec.rows.forEach((row) => ws.addRow(row));
+      sec.head.forEach((h, i) => { widths[i] = Math.max(widths[i] ?? 0, h.length); });
+      sec.rows.slice(0, 200).forEach((row) => row.forEach((v, i) => { widths[i] = Math.max(widths[i] ?? 0, String(v ?? "").length); }));
+    }
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = Math.min(Math.max(w + 2, 10), 60); });
   }
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

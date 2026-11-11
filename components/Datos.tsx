@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PROCESSES, n0 } from "@/lib/domain";
-import Entregado from "./Entregado";
+import RealDia from "./RealDia";
 
 type Kind = "empaque" | "entregas";
 type View = Kind | "entregado";
@@ -74,20 +74,20 @@ export default function Datos({ role }: { role: string }) {
       const r = await fetch("/api/datos/import", { method: "POST", body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) return setMsg({ t: [j.error ?? "No se pudo importar.", ...(j.problems ?? [])].join(" "), bad: true });
-      setMsg({ t: `Importados ${j.days.length} días (${j.changes} cambios${j.newArticles.length ? `; artículos nuevos: ${j.newArticles.join(", ")}` : ""}).` });
+      setMsg({ t: `Importados ${j.days.length} días: ${j.programChanges} cambios de programa, ${j.realChanges} de real y ${j.invChanges} de inventario${j.newArticles.length ? `; artículos nuevos: ${j.newArticles.join(", ")}` : ""}.` });
       await load();
     } finally { setBusy(false); }
   }
 
   const setE = (id: number, k: "qty" | "process", v: string) => setEdit((p) => ({ ...p, [id]: { ...p[id], [k]: v } }));
-  const title = view === "entregado" ? "Entregado a embarques" : kind === "empaque" ? "Programa de empaque" : "Programa de entregas";
+  const title = view === "entregado" ? "Real del día" : kind === "empaque" ? "Programa de empaque" : "Programa de entregas";
 
   return (
     <>
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
         <div><div className="kicker">Entradas de datos</div><h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.05 }}>{title}</h1></div>
         <div className="seg">
-          {([["empaque", "Prog. empaque"], ["entregas", "Prog. entregas"], ["entregado", "Entregado"]] as [View, string][])
+          {([["empaque", "Prog. empaque"], ["entregas", "Prog. entregas"], ["entregado", "Real del día"]] as [View, string][])
             .filter(([k]) => programs || k === "entregado")
             .map(([k, t]) => (
               <label key={k} className="seg-opt"><input type="radio" name="dt" checked={view === k} onChange={() => setView(k)} />{t}</label>
@@ -95,7 +95,7 @@ export default function Datos({ role }: { role: string }) {
         </div>
       </div>
 
-      {view === "entregado" ? <Entregado day={day} onDay={setDay} /> : <>
+      {view === "entregado" ? <RealDia day={day} onDay={setDay} /> : <>
       {msg && <div role="status" style={{ padding: 12, fontSize: 14, borderRadius: 10, background: msg.bad ? "#fde3e8" : "#e8f5d6", color: msg.bad ? "#9a0022" : "#2f5f0b" }}>{msg.t}</div>}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>

@@ -4,6 +4,8 @@ import { loadConfig } from "./config-db";
 import { dayChip, n0, pct, sem } from "./domain";
 import { MULTIVAC_IDS, MULTIVAC_NAMES } from "./config";
 import { loadRaw, ratio, summarizeDay } from "./tablero";
+import { monthRange } from "./calendario";
+import { loadPeriodo } from "./periodo-db";
 
 type Db = ReturnType<typeof sql>;
 export type Cell = { t: string; bg: string; ink: string };
@@ -22,8 +24,8 @@ export async function loadTendencia(db: Db, day: string, days: string[]): Promis
     ({ group, label, cells: S.map((s) => (kind === "s" ? cellS(f(s)) : cellN(f(s), fmt))) });
   const tec = (s: (typeof S)[number]) => s.machines.Tecnovac.c.raw;
   const rows = [
-    row("Entregas PT", "Fill rate", (s) => (s.hasDeliv ? s.ent.fill : null)),
-    row("Entregas PT", "Volumen", (s) => (s.hasDeliv ? s.ent.vol : null)),
+    row("Empaque", "Cumplimiento", (s) => s.cumplE),
+    row("Entregas CR100", "Cumplimiento", (s) => (s.hasDeliv ? s.ent.vol : null)),
     row("Multivac", "Total", (s) => s.mvRatio),
     ...MULTIVAC_IDS.map((id) => row("Multivac", MULTIVAC_NAMES[id], (s) => (s.mvReal[id] != null ? ratio(s.mvReal[id] as number, s.progMv[id] ?? 0) : null))),
     row("Tecnovac", "Cumplimiento", (s) => s.machines.Tecnovac.ratio),
@@ -34,31 +36,16 @@ export async function loadTendencia(db: Db, day: string, days: string[]): Promis
     ...(["Termo MK", "Embolsado", "Polar"] as const).map((m) => row(m, "Cumplimiento", (s) => s.machines[m].ratio)),
   ];
 
-  // acumulado del mes (hasta el día elegido), solo sobre días con captura / entregas
-  const mv = MULTIVAC_IDS as readonly number[];
-  const [del, mvr] = await Promise.all([
-    db`with m as (select date_trunc('month', ${day}::date)::date as d0),
-            dd as (select distinct day from deliveries, m where day >= m.d0 and day <= ${day}::date),
-            p as (select p.day, p.article_id, p.qty as prog from programs p join dd on dd.day = p.day where p.kind = 'entregas')
-       select coalesce(sum(p.prog),0)::bigint as prog,
-              (select coalesce(sum(qty),0) from deliveries, m where day >= m.d0 and day <= ${day}::date)::bigint as entregado,
-              coalesce(sum(least(coalesce(d.qty,0), p.prog)),0)::bigint as capped
-       from p left join deliveries d on d.day = p.day and d.article_id = p.article_id`,
-    db`with m as (select date_trunc('month', ${day}::date)::date as d0),
-            hd as (select day, article_id, sum(pieces) as real from hourly_records, m
-                   where day >= m.d0 and day <= ${day}::date and article_id = any(${mv}::int[]) group by day, article_id having sum(pieces) is not null)
-       select hd.article_id, sum(hd.real)::bigint as real,
-              (select coalesce(sum(p.qty),0) from programs p where p.kind = 'empaque' and p.article_id = hd.article_id and p.day in (select day from hd h2 where h2.article_id = hd.article_id))::bigint as prog
-       from hd group by hd.article_id`,
-  ]);
-  const prog = Number(del[0].prog), ent = Number(del[0].entregado), capped = Number(del[0].capped);
-  const byId = new Map(mvr.map((r) => [Number(r.article_id), { real: Number(r.real), prog: Number(r.prog) }]));
-  const mvReal = [...byId.values()].reduce((a, x) => a + x.real, 0), mvProg = [...byId.values()].reduce((a, x) => a + x.prog, 0);
+  // acumulado del mes (hasta el día elegido): empaque y entregas ponderados, como en el libro
+  const mo = monthRange(day), { periodo: mtd } = await loadPeriodo(db, mo.from, mo.to, day);
+  const t = mtd.total;
+  const mvM = MULTIVAC_IDS.map((id) => { const a = mtd.articles.find((x) => x.id === id)!; return a.progE > 0 ? a : null; });
+  const mvReal = mvM.reduce((s, a) => s + (a?.realE ?? 0), 0), mvProg = mvM.reduce((s, a) => s + (a?.progE ?? 0), 0);
   const month = [
-    { a: "Entregas · volumen", b: prog ? pct(ratio(ent, prog)) : "—", c: prog ? `${n0(ent)} de ${n0(prog)} pzs.` : "Sin entregas en el mes" },
-    { a: "Entregas · fill rate", b: prog ? pct(ratio(capped, prog)) : "—", c: "Mes a la fecha" },
+    { a: "Empaque · cumplimiento", b: pct(t.cumplE), c: t.progE ? `${n0(t.realE)} de ${n0(t.progE)} pzs.` : "Sin captura en el mes" },
+    { a: "Entregas · cumplimiento", b: pct(t.cumplG), c: t.progG ? `${n0(t.realG)} de ${n0(t.progG)} pzs.` : "Sin captura en el mes" },
     { a: "Multivac", b: mvProg ? pct(ratio(mvReal, mvProg)) : "—", c: mvProg ? `${n0(mvReal)} de ${n0(mvProg)} pzs.` : "Sin captura en el mes" },
-    { a: "Multivac por producto", b: MULTIVAC_IDS.map((id) => (byId.get(id)?.prog ? (((byId.get(id)!.real / byId.get(id)!.prog) * 100).toFixed(1) + "%") : "—")).join(" · "), c: MULTIVAC_IDS.map((id) => MULTIVAC_NAMES[id].split(" ")[0]).join(" · ") },
+    { a: "Multivac por producto", b: mvM.map((a) => (a ? (a.cumplE == null ? "—" : (a.cumplE * 100).toFixed(1) + "%") : "—")).join(" · "), c: MULTIVAC_IDS.map((id) => MULTIVAC_NAMES[id].split(" ")[0]).join(" · ") },
   ];
   return { day, labels: all.map(dayChip), rows, month };
 }
